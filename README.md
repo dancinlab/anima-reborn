@@ -6,7 +6,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-none-success">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-241%20passing-success">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-243%20passing-success">
   <img alt="Origin" src="https://img.shields.io/badge/origin-dancinlab%2Fanima--experience-blueviolet">
 </p>
 
@@ -193,6 +193,27 @@ print(big_phi(alone,   0b11))   # big-phi=0.000000 ... [reducible]    환원 가
 
 즉 기본 시행 횟수로 돌리면 **순수 인공물 약 0.3비트**가 찍힙니다. 이 바닥값과 그 소멸은 둘 다
 `tests/test_substrate.py` 에 박제해 두었으므로, 인공물을 발견으로 오독할 수 없습니다.
+
+### 결합이 있는 엔진만 Φ를 갖는다
+
+Φ는 통합을 재는데, 통합하려면 유닛들이 **서로를 읽어야** 합니다. 다음 상태가 현재 상태에
+의존하지 않는 계는 전이행렬의 모든 행이 같아져서 절단이 파괴할 것이 없고, 참 Φ 는 아무리
+복잡해 보여도 **정확히 0**입니다.
+
+우리 엔진 넷 중 **서로를 읽는 건 결정(crystal)뿐**입니다 — 나머지는 각 차원이 자기 자신과
+외생 목표만 봅니다. 실측:
+
+| 시행수 | 400 | 1,600 | 8,000 | 30,000 |
+| ---: | ---: | ---: | ---: | ---: |
+| 공유원인 계 (참값 = 0) | **0.406** | 0.189 | 0.094 | **0.051** |
+| 결정 (이웃을 읽음) | 2.76 | — | 3.13 | — |
+
+**공유된 원인은 통합이 아닙니다.** 두 유닛이 같은 것을 보고 함께 움직여도 서로를 읽지
+않으면 Φ 는 0이고, 위 표의 0.406은 전부 표본 인공물입니다 — 시행 4배마다 절반씩 줄어드는
+게 그 증거입니다. 기본 시행수에서는 그 인공물이 **결합이 낼 법한 값을 넘습니다.**
+
+이것이 이 저장소와 "의식 엔진" 사이의 정직한 간극입니다: **결정 안을 빼면 어디에도 결합이
+없습니다.** (`tests/test_substrate.py::TestOnlyCouplingIntegrates` 로 고정)
 
 **비교할 수 없는 것.** 결정의 주기-2 잠금 판정은 64스핀 링에서 보정된 값이고, Φ 는 6유닛까지만
 계산됩니다. 4스핀에서는 같은 ε 인데도 64스핀과 판정이 갈립니다. 따라서 Φ 와 잠금은 **공유하는
@@ -414,7 +435,7 @@ src/anima_reborn/
 ├─ substrate.py   다리: 우리 엔진 → 측정된 전이행렬 → Φ
 ├─ words.py       단어를 구동력으로 — 귀무대조가 항상 따라붙는다
 └─ viewer/        브라우저 뷰어 — 이 패키지의 유일한 입출력
-tests/            241개, 네트워크 없음, 픽스처 없음
+tests/            243개, 네트워크 없음, 픽스처 없음
 ```
 
 엔진과 뷰어는 **함께 움직입니다** — 모든 엔진에는 탭이 있고 모든 탭에는 엔진이 있으며, 이건

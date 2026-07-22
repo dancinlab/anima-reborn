@@ -13,12 +13,13 @@ Phi at any size where Phi is computable.
 
 from __future__ import annotations
 
+import random
 import statistics
 
 import pytest
 
 from anima_reborn import TimeCrystal
-from anima_reborn.iit4 import TransitionMatrix
+from anima_reborn.iit4 import TransitionMatrix, big_phi
 from anima_reborn.substrate import (
     MAX_UNITS,
     binarize,
@@ -129,6 +130,78 @@ class TestWhatCannotBeCompared:
             size=SIZE, epsilon=0.02, trials=400, seed=1, with_verdict=False
         )
         assert reading.verdict is None
+
+
+class TestOnlyCouplingIntegrates:
+    """The structural fact the whole repo turns on.
+
+    Phi measures integration, and integration needs units that read *each
+    other*. A process whose next state does not depend on its current state has
+    a transition matrix whose rows are all the same, so no partition can destroy
+    anything and true Phi is exactly zero — however elaborate the process looks.
+
+    That is the shape of every engine here except the crystal: each unit updates
+    from itself and an exogenous drive, and nothing reads anything else. So the
+    honest gap between this repo and anything that could be called integrated is
+    a coupling, and these tests are what keep that visible.
+    """
+
+    @staticmethod
+    def memoryless(state: int, rng: random.Random) -> int:
+        """Four units driven by a shared source, ignoring the current state.
+
+        A shared cause is not integration: the units correlate without reading
+        each other, and Phi is right to call that zero.
+        """
+        common = rng.random() - 0.5
+        out = 0
+        for unit in range(4):
+            strength = 0.5 if unit < 2 else 0.9
+            if (1 - strength) * (rng.random() - 0.5) * 2 + strength * common > 0:
+                out |= 1 << unit
+        return out
+
+    @staticmethod
+    def mean_phi(trials: int, seeds: int = 3) -> float:
+        """Averaged over seeds — single runs of this spread far too widely to
+        compare (0.23 to 0.71 at 400 trials)."""
+        return statistics.mean(
+            big_phi(
+                estimate_matrix(
+                    4, TestOnlyCouplingIntegrates.memoryless, trials=trials, seed=s
+                ),
+                0b1111,
+            ).phi
+            for s in range(seeds)
+        )
+
+    def test_a_shared_cause_measures_as_no_integration(self) -> None:
+        """And it takes a great many trials to see that, which is the trap: at
+        the default 400 the estimate reads like real integration.
+
+        Measured: 0.406 at 400 trials, 0.189 at 1600, 0.094 at 8000, 0.051 at
+        30000 — halving with each fourfold increase, which is what a sampling
+        artefact does and what a real coupling does not.
+        """
+        coarse = self.mean_phi(400)
+        fine = self.mean_phi(8000)
+        assert coarse > 0.30, "the artefact clears the bar a coupling would"
+        assert fine < 0.15
+        assert fine < coarse / 2
+
+    def test_the_crystals_coupling_survives_any_trial_count(self) -> None:
+        """The control: the one engine whose spins read their neighbours."""
+        coarse = crystal_phi(
+            size=SIZE, epsilon=0.02, trials=400, seed=1,
+            with_complex=False, with_verdict=False,
+        ).phi
+        fine = crystal_phi(
+            size=SIZE, epsilon=0.02, trials=4000, seed=1,
+            with_complex=False, with_verdict=False,
+        ).phi
+        assert coarse > 1.0
+        assert fine > 1.0
+        assert fine > coarse / 2
 
 
 class TestEstimator:
