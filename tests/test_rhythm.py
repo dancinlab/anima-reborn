@@ -291,3 +291,73 @@ class TestRepresentationIsValidated:
         assert reading.drives == 4
         assert reading.ticks == 200
         assert "200 ticks" in str(reading)
+
+
+class TestWhatSurvivesSilence:
+    """The one capability recurrence buys rather than merely exhibits.
+
+    Told a value and then made deaf — coupling 1.0, so the drive is
+    bit-unreachable — the ring settles into one of its two consistent sign
+    assignments and stays there forever. The acyclic wirings have no such state
+    to stay in and fall to their fixed points. Measured in
+    `state/communication/silence.py`; pinned here so it cannot quietly stop
+    being true.
+
+    It is exactly one bit. The ring's cycle carries four sign inversions, so the
+    loop's net sign is positive and the autonomous ring is bistable — that is a
+    derivation, not a measurement, and the measurement agrees.
+    """
+
+    @staticmethod
+    def _after_silence(drive, *, wiring: Wiring, seed: int, silence: int = 240):
+        engine = CoupledEngine(
+            wiring=wiring,
+            rhythm=ALTERNATING,
+            drive=drive,
+            seed=seed,
+            initial=(0.0,) * 4,
+        )
+        engine.run(400)
+        engine.rhythm = FIXED  # deaf: the drive cannot be heard at all
+        return engine.run(silence).values
+
+    def _corners(self, wiring: Wiring, seed: int = 1):
+        return [
+            self._after_silence(
+                tuple((((i >> k) & 1) * 2 - 1) * 0.8 for k in range(4)),
+                wiring=wiring,
+                seed=seed,
+            )
+            for i in range(16)
+        ]
+
+    def test_the_ring_still_differs_and_the_falsifiers_do_not(self) -> None:
+        def spread(points):
+            centre = [
+                statistics.mean(p[i] for p in points) for i in range(len(points[0]))
+            ]
+            return statistics.mean(
+                sum((p[i] - centre[i]) ** 2 for i in range(len(centre))) ** 0.5
+                for p in points
+            )
+
+        ring = spread(self._corners(Wiring.RING))
+        assert ring > 1.0, ring
+        for wiring in (Wiring.FEEDFORWARD, Wiring.SELF):
+            assert spread(self._corners(wiring)) < 0.01, wiring
+
+    def test_and_what_it_holds_is_one_bit(self) -> None:
+        """Two of sixteen sign-patterns, so four bits went in and one came out.
+        Quoting the separation without this reads as a concept surviving."""
+        patterns = {tuple(v > 0 for v in p) for p in self._corners(Wiring.RING)}
+        assert len(patterns) == 2, patterns
+
+    def test_the_bit_is_the_drive_s_and_not_the_walk_s(self) -> None:
+        """Eight independent walks agree completely on 0.78% of drives by
+        chance. If the walk owned the bit this would fail."""
+        drive = tuple((((5 >> k) & 1) * 2 - 1) * 0.8 for k in range(4))
+        landed = {
+            tuple(v > 0 for v in self._after_silence(drive, wiring=Wiring.RING, seed=w))
+            for w in range(8)
+        }
+        assert len(landed) == 1, landed

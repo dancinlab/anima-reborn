@@ -60,6 +60,13 @@ drive BEFORE the engine every time: the engine can only lose information, so a t
 score alone cannot be attributed to it, and the deaf arm (coupling 1.0, drive
 bit-unreachable) is what proves the engine was in the path at all.
 
+Made deaf AFTER being told, the ring keeps its state forever while every acyclic wiring
+falls to a fixed point — the first capability in this repo that recurrence buys rather
+than merely exhibits (`state/communication/silence.py`). It is exactly one bit: four sign
+inversions round the cycle make the loop's net sign positive, so the autonomous ring is
+bistable, and that is a derivation the measurement then confirmed. Say "holds", never
+"uses" — nothing consumes the held state.
+
 `base.py` is the one module here that is **not** a port: it composes the four under a
 single mortal clock. Its thesis, its measured constant `EPSILON`, and the line between
 what it designs in and what it discovers are all stated in its docstring — keep them
