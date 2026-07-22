@@ -5,7 +5,7 @@ ported to Python, what they compose into once they share a clock (`base.py`), an
 IIT 4.0 engine to measure the result with (`iit4/`, bit-exact against its hexa origin).
 
 Layout: `info` · `emergence` · `crystal` · `repulsion` · `pipeline` · `base` · `iit4/` ·
-`substrate` · `words` · `viewer/`, with work outputs in `state/`. Every folder carries its
+`coupled` · `substrate` · `words` · `viewer/`, with work outputs in `state/`. Every folder carries its
 own `CLAUDE.md`, and the local one wins.
 
 ## doc-language
@@ -39,6 +39,10 @@ own `CLAUDE.md`, and the local one wins.
 ## preserve-state
 - do: Every non-source output lands in git-tracked `state/` — delegated reports verbatim, re-measurements separately, each result with a runnable script and its conditions
 - dont: Leaving a measurement in `/tmp` · quoting a delegated number as verified without re-deriving it here
+
+## claims-need-controls
+- do: Ship every claim with the null that could fake it — recurrence via `recurrence_evidence`, word binding via a time-shift null, Phi with state/threshold/tau/trials
+- dont: A verdict property on ONE sampled reading · a threshold picked rather than measured against its own null
 
 ## engine-purity
 - do: Standard library only · zero runtime deps · every engine reproducible under `seed=` · all I/O confined to `viewer/`

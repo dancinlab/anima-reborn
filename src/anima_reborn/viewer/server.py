@@ -32,6 +32,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from ..base import BaseEngine
+from ..coupled import NAMES as COUPLED_NAMES, CoupledEngine, Wiring
 from ..crystal import TimeCrystal
 from ..emergence import EmergenceEngine
 from ..pipeline import Pipeline
@@ -51,6 +52,7 @@ TICK_RATES = {
     "repulsion": 30.0,
     "pipeline": 30.0,
     "base": 30.0,
+    "coupled": 30.0,
 }
 """Ticks per second, carried from the origin's `setInterval` periods so the
 engines run at the speed their thresholds were chosen against."""
@@ -214,12 +216,54 @@ class _BaseHandler:
         }
 
 
+class _CoupledHandler:
+    """The coupled field.
+
+    Phi is far too slow to compute per frame, so the panel streams the live
+    dynamics and the measurement is a separate, deliberate act — the operator
+    presses for it. A number this conditional should not arrive as ambient
+    decoration.
+    """
+
+    @staticmethod
+    def configure(engine: CoupledEngine, params: dict[str, list[str]]) -> None:
+        raw = params.get("wiring")
+        if raw:
+            try:
+                wiring = Wiring(raw[0])
+            except ValueError:
+                return  # unknown value: leave the engine as it is
+            if wiring is not engine.wiring:
+                engine.wiring = wiring
+                engine.reset()  # a different wiring is a different system
+        engine.gain = max(0.1, _number(params, "gain", engine.gain))
+
+    @staticmethod
+    def describe(engine: CoupledEngine) -> dict[str, Any]:
+        state = engine.state
+        return {
+            "names": list(COUPLED_NAMES),
+            "values": _round(state.values),
+            "sources": [
+                -1 if s is None else s for s in engine.wiring.sources
+            ],
+            "wiring": engine.wiring.value,
+            "cyclic": engine.wiring.is_cyclic,
+            "amplitude": engine.amplitude,
+            "gain": engine.gain,
+            "tension": state.tension,
+            "pattern": state.pattern,
+            "ticks": state.ticks,
+        }
+
+
 _HANDLERS: dict[str, Any] = {
     "emergence": _EmergenceHandler,
     "crystal": _CrystalHandler,
     "repulsion": _RepulsionHandler,
     "pipeline": _PipelineHandler,
     "base": _BaseHandler,
+    "coupled": _CoupledHandler,
 }
 
 
@@ -332,6 +376,7 @@ class Viewer:
             "repulsion": RepulsionField(seed=seed),
             "pipeline": Pipeline(seed=seed),
             "base": BaseEngine(seed=seed),
+            "coupled": CoupledEngine(seed=seed),
         }
         self._engines = {
             name: _Guarded(engine, threading.Lock())

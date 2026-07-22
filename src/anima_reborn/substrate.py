@@ -40,11 +40,26 @@ import random
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from .coupled import AMPLITUDE, GAIN, MACRO_STEP, CoupledEngine, Wiring
 from .crystal import COUPLING, EPSILON, INVERSE_TEMPERATURE, CrystalVerdict, TimeCrystal
-from .iit4 import Complex, SystemPhi, TransitionMatrix, big_phi, find_complex
+from .iit4 import (
+    Complex,
+    DirectedPhi,
+    SystemPhi,
+    TransitionMatrix,
+    big_phi,
+    directed_big_phi,
+    find_complex,
+)
 
 __all__ = [
+    "CoupledReading",
+    "RECURRENCE_FLOOR",
+    "RecurrenceEvidence",
     "SubstrateReading",
+    "coupled_matrix",
+    "coupled_phi",
+    "recurrence_evidence",
     "binarize",
     "crystal_matrix",
     "crystal_phi",
@@ -241,4 +256,210 @@ def crystal_phi(
         total=measured.total,
         distinctions=len(measured.structure.distinctions),
         verdict=verdict,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class CoupledReading:
+    """What IIT 4.0 says about the coupled engine, with its conditions attached.
+
+    Both measures are reported because they disagree, and the disagreement is
+    the finding: `phi` cuts undirected and cannot see that a feedforward system
+    is reducible, `directed_phi` cuts one way at a time and can. A claim about
+    recurrence uses the directed number.
+
+    The conditions are fields rather than documentation because they are part of
+    the result. The same engine reads 12.07 at `macro_step = 17` and exactly
+    0.0000 at 1.
+    """
+
+    wiring: Wiring
+    phi: float
+    """Undirected big-Phi — comparable with the rest of the repo."""
+    directed_phi: float
+    """Directed big-Phi. Zero means some direction of influence can be severed
+    for free, which is what reducible means."""
+    complex_units: int
+    """Bitmask of the maximal complex, or 0 when there is none."""
+    state: int
+    macro_step: int
+    trials: int
+
+    @property
+    def is_reducible(self) -> bool:
+        """Exactly zero directed Phi — some direction severs for free.
+
+        This direction is safe to read off one measurement: a sampled matrix can
+        invent structure but cannot invent its absence, so a zero here is a zero.
+        The opposite claim is not symmetric, which is why there is no
+        `is_recurrent` — see `recurrence_evidence`.
+        """
+        return self.directed_phi == 0.0
+
+    def __str__(self) -> str:
+        entity = f"{self.complex_units:04b}" if self.complex_units else "none"
+        return (
+            f"{self.wiring.value:<12} phi={self.phi:6.3f} "
+            f"directed={self.directed_phi:6.3f} "
+            f"{'[reducible]' if self.is_reducible else '           '} "
+            f"complex={entity} (state {self.state:04b}, tau={self.macro_step}, "
+            f"{self.trials} trials)"
+        )
+
+
+def coupled_matrix(
+    wiring: Wiring = Wiring.RING,
+    *,
+    macro_step: int = MACRO_STEP,
+    gain: float = GAIN,
+    amplitude: float = AMPLITUDE,
+    trials: int = TRIALS,
+    seed: int | None = None,
+) -> TransitionMatrix:
+    """Measure the coupled engine's transition matrix.
+
+    One transition is `macro_step` engine ticks: reconstruct the units to
+    +/-`amplitude` from the state, run, threshold at zero. Reconstruction
+    amplitude and macro-step both sit inside the result.
+    """
+    if macro_step < 1:
+        raise ValueError(f"macro_step must be >= 1, got {macro_step}")
+
+    def step(state: int, rng: random.Random) -> int:
+        engine = CoupledEngine(
+            wiring=wiring,
+            gain=gain,
+            amplitude=amplitude,
+            seed=rng.getrandbits(63),
+            initial=tuple(
+                amplitude if state >> i & 1 else -amplitude for i in range(4)
+            ),
+        )
+        return engine.run(macro_step).pattern
+
+    return estimate_matrix(4, step, trials=trials, seed=seed)
+
+
+def coupled_phi(
+    wiring: Wiring = Wiring.RING,
+    *,
+    state: int = 0b0101,
+    macro_step: int = MACRO_STEP,
+    gain: float = GAIN,
+    amplitude: float = AMPLITUDE,
+    trials: int = TRIALS,
+    seed: int | None = None,
+    with_complex: bool = True,
+) -> CoupledReading:
+    """Measure the coupled engine's integration.
+
+    Args:
+        wiring: Which engine to measure. Pass `Wiring.SELF` or
+            `Wiring.FEEDFORWARD` for the falsifiers.
+        state: Which pattern to measure at — Phi belongs to a system *in a
+            state*. The default is the ring's own attractor.
+        macro_step: Engine ticks per measured transition. At 1 every wiring
+            reads exactly zero; see `coupled.MACRO_STEP`.
+        trials: Samples per state. The artefact floor falls with this.
+    """
+    matrix = coupled_matrix(
+        wiring,
+        macro_step=macro_step,
+        gain=gain,
+        amplitude=amplitude,
+        trials=trials,
+        seed=seed,
+    )
+    undirected: SystemPhi = big_phi(matrix, state)
+    directed: DirectedPhi = directed_big_phi(matrix, state)
+    entity: Complex | None = find_complex(matrix, state) if with_complex else None
+
+    return CoupledReading(
+        wiring=wiring,
+        phi=undirected.phi,
+        directed_phi=directed.phi,
+        complex_units=entity.units if entity else 0,
+        state=state,
+        macro_step=macro_step,
+        trials=trials,
+    )
+
+
+RECURRENCE_FLOOR = 1.0
+"""Directed Phi a wiring must clear before recurrence is entertained.
+
+Measured against the null rather than picked: four units reading only
+themselves, where the true value is exactly zero, produce 0.251 mean and 0.547
+worst over eight seeds at 400 trials, decaying to 0.037 at 25600. This bar is
+above every one of those, and the ring measures ~9.9 — a factor of sixty.
+
+Verified separately that the measure itself is not the source: on an exactly
+factorized transition matrix, built analytically with no sampling at all, both
+`big_phi` and `directed_big_phi` return 0.000000. The residue is sampling, and
+sampling alone.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class RecurrenceEvidence:
+    """Whether integration survives being looked at harder.
+
+    A single positive Phi means nothing on its own: at 6400 trials the
+    self-wired null — four units reading only themselves, no coupling anywhere —
+    still measures 0.031 directed. Sampling noise manufactures structure, and a
+    bare threshold would call that recurrence.
+
+    What separates signal from floor is the same discipline the rest of the repo
+    uses: measure twice and see whether it shrinks. Artefacts halve as trials
+    grow; a real coupling does not.
+    """
+
+    coarse: CoupledReading
+    fine: CoupledReading
+
+    @property
+    def held(self) -> bool:
+        """The directed value survived a fourfold increase in sampling."""
+        return self.fine.directed_phi > self.coarse.directed_phi / 2
+
+    @property
+    def is_recurrent(self) -> bool:
+        """Integration that is substantial AND did not shrink.
+
+        Both conditions, because either alone is fooled. The magnitude bar of
+        `RECURRENCE_FLOOR` is measured, not chosen: the self-wired null — no
+        coupling anywhere, true Phi exactly zero — reads 0.251 / 0.155 / 0.081 /
+        0.037 mean over eight seeds at 400 / 1600 / 6400 / 25600 trials, with a
+        worst seed of 0.547. The bar sits nearly twice that worst case.
+        """
+        return self.fine.directed_phi > RECURRENCE_FLOOR and self.held
+
+    def __str__(self) -> str:
+        trend = "held" if self.held else "collapsed"
+        return (
+            f"{self.coarse.wiring.value:<12} "
+            f"{self.coarse.trials}->{self.fine.trials} trials: "
+            f"{self.coarse.directed_phi:.3f} -> {self.fine.directed_phi:.3f} "
+            f"({trend}) "
+            f"{'RECURRENT' if self.is_recurrent else 'not established'}"
+        )
+
+
+def recurrence_evidence(
+    wiring: Wiring = Wiring.RING,
+    *,
+    trials: int = TRIALS,
+    factor: int = 4,
+    **kwargs: Any,
+) -> RecurrenceEvidence:
+    """Measure a wiring twice and report whether its integration held.
+
+    Recurrence is not readable from one number, so this refuses to return one.
+    Any keyword `coupled_phi` accepts is forwarded to both measurements.
+    """
+    if factor < 2:
+        raise ValueError(f"factor must be >= 2, got {factor}")
+    return RecurrenceEvidence(
+        coarse=coupled_phi(wiring, trials=trials, with_complex=False, **kwargs),
+        fine=coupled_phi(wiring, trials=trials * factor, with_complex=False, **kwargs),
     )

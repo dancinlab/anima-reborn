@@ -14,11 +14,18 @@ Rendering, timers and DOM wiring stay in the origin; only the maths lives here.
 | `repulsion.py` | A × G latent field | A × G tab (moods from `tension_link.py`) |
 | `pipeline.py` | repulsion → sampled streams → emergence | pipeline tab |
 | `base.py` | all four under the crystal's clock — rotation only while LOCKED | (new — not in the origin) |
+| `coupled.py` | A and G reading each other — the only engine here with nonzero integration | (new — not in the origin) |
 | `substrate.py` | drive an engine from every state → measured TPM → Phi | (new — not in the origin) |
 | `words.py` | words as a continuing drive, always paired with a null control | (new — not in the origin) |
 
 `pipeline.py` imports `PHASE_RATE` / `PULL` / `DAMPING` from `repulsion.py` — the two
 engines share one drift law, and it is defined once.
+
+`coupled.py` is where the repo stops being a set of driven simulations. Everywhere else a
+unit reads itself and something exogenous, which is why Phi is zero by architecture; there
+the source is a live partner. Its falsifiers ship as part of its API (`Wiring.FEEDFORWARD`,
+`Wiring.SELF`) rather than living only in tests — the claim is that the wiring is what
+produces the integration, and that is only checkable if the other wirings are reachable.
 
 `base.py` is the one module here that is **not** a port: it composes the four under a
 single mortal clock. Its thesis, its measured constant `EPSILON`, and the line between

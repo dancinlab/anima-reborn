@@ -108,6 +108,7 @@
   <button class="tab" data-tab="crystal">🔮 시간 결정</button>
   <button class="tab" data-tab="repulsion">🧲 A × G 반발장</button>
   <button class="tab" data-tab="pipeline">🌊 파이프라인</button>
+  <button class="tab" data-tab="coupled">🔗 결합장</button>
 </nav>
 
 <!-- ── Emergence ──────────────────────────────────────────────────────── -->
@@ -333,6 +334,62 @@
   </div>
 </section>
 
+<!-- ── 결합장 ────────────────────────────────────────────────────────── -->
+<section class="panel" id="p-coupled">
+  <div class="card">
+    <h2>간극이 판독값이 아니라 통로가 될 때</h2>
+    <p class="note">
+      다른 모든 엔진은 <strong>바깥에서</strong> 구동됩니다 — 각 차원이 자기 자신과 외생 목표만
+      보죠. 그래서 아무리 복잡해 보여도 통합(Φ)은 <strong>정확히 0</strong>입니다. 여기서는 딱
+      하나를 바꿉니다: 각 유닛이 쫓는 원천이 시계가 아니라 <strong>살아 있는 상대</strong>입니다.
+      반발의 정체는 그대로고, 간극이 통로가 됩니다.
+    </p>
+
+    <div class="controls">
+      <label class="ctl">배선
+        <select id="cp-wiring" style="background:#232838;color:#e6e8ef;border:1px solid #2b303b;border-radius:6px;padding:5px 9px;font:inherit;font-size:12.5px">
+          <option value="ring">고리 — 영향이 되돌아온다</option>
+          <option value="feedforward">전방향 — 되돌아오지 않는다</option>
+          <option value="self">자기참조 — 결합 없음</option>
+        </select>
+      </label>
+      <label class="ctl">이득 <input type="range" id="cp-gain" min="5" max="80" value="30"><b id="cp-gain-v">3.0</b></label>
+      <button class="act" data-reset="coupled">초기화</button>
+    </div>
+
+    <div class="grid-scatter">
+      <div>
+        <p class="label">누가 누구를 읽는가 — 화살표가 영향의 방향</p>
+        <canvas id="cp-graph" height="240"></canvas>
+      </div>
+      <div>
+        <p class="label">유닛 위치 (a0 · a1 · g0 · g1)</p>
+        <canvas id="cp-bars" height="120"></canvas>
+        <div style="height:12px"></div>
+        <p class="label">이진 패턴 — Φ 를 재는 상태</p>
+        <canvas id="cp-pattern" height="60"></canvas>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><div class="k">배선</div><div class="v"><span class="badge" id="cp-wiring-b">—</span></div></div>
+      <div class="metric"><div class="k">간극(tension)</div><div class="v" id="cp-tension">—</div></div>
+      <div class="metric"><div class="k">패턴</div><div class="v" id="cp-pattern-v">—</div></div>
+      <div class="metric"><div class="k">틱</div><div class="v" id="cp-ticks">—</div></div>
+    </div>
+    <div class="status" id="cp-status"></div>
+
+    <p class="note" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+      <strong>Φ 는 여기에 실시간으로 표시하지 않습니다.</strong> 한 번 재는 데 수 초가 걸리고,
+      값이 <em>상태 · 이진화 문턱 · 재구성 진폭 · 거대걸음 τ · 시행수</em>에 전부 의존하기
+      때문입니다. τ=1 이면 어떤 배선이든 정확히 0 입니다. 조건 없이 흘려보내면 장식이 되므로,
+      측정은 명시적으로 합니다:
+      <code>python -c "from anima_reborn.substrate import recurrence_evidence; print(recurrence_evidence())"</code>
+      — 두 번 재서 유지되는지까지 봅니다.
+    </p>
+  </div>
+</section>
+
 <footer>
   기본 창 크기(250표본)에서는 <strong>완전히 독립인</strong> 두 스트림도 상호정보량이
   약 <b>0.155비트</b>로 찍힙니다 — 결합이 아니라 표본이 적어서 생기는 인공물입니다.
@@ -517,7 +574,7 @@ function setBadge(el, text, cls) {
 // The server pushes a frame per engine tick over one long-lived connection.
 // Frames are stashed, not drawn on arrival; drawing happens on the display's
 // own refresh, so a burst of frames costs one repaint rather than several.
-const PREFIX = { emergence: "em", crystal: "cr", repulsion: "rp", pipeline: "pl", base: "bs" };
+const PREFIX = { emergence: "em", crystal: "cr", repulsion: "rp", pipeline: "pl", base: "bs", coupled: "cp" };
 const ROTATION = [];   // recent accumulated phase, so a stalled clock is visible
 
 let active = "base";
@@ -532,6 +589,7 @@ function controlsFor(name) {
   if (name === "crystal") return { epsilon: $("cr-eps").value / 100 };
   if (name === "repulsion") return { separation: $("rp-sep").value / 100, noise: $("rp-noise").value / 100 };
   if (name === "base") return { epsilon: $("bs-eps").value / 100, separation: $("bs-sep").value / 100 };
+  if (name === "coupled") return { wiring: $("cp-wiring").value, gain: $("cp-gain").value / 10 };
   return { separation: $("pl-sep").value / 100 };
 }
 
@@ -587,6 +645,7 @@ function render(name, data) {
   else if (name === "crystal") renderCrystal(data);
   else if (name === "repulsion") renderRepulsion(data);
   else if (name === "base") renderBase(data);
+  else if (name === "coupled") renderCoupled(data);
   else renderPipeline(data);
 }
 
@@ -689,6 +748,79 @@ function renderBase(d) {
   }
 }
 
+const WIRING_KO = { ring: "고리", feedforward: "전방향", self: "자기참조" };
+const WIRING_TEXT = {
+  ring: "닫힌 순환 — 영향이 출발점으로 되돌아옵니다. 어떤 방향을 끊어도 공짜가 아닙니다.",
+  feedforward: "되먹임 없음 — 첫 유닛은 바깥에서만 받습니다. 그쪽으로 향하는 영향을 끊으면 잃을 게 없어, 이론은 이걸 환원가능이라 부릅니다.",
+  self: "결합 없음 — 각 유닛이 자기만 읽습니다. 통합할 것이 애초에 없습니다.",
+};
+
+function renderCoupled(d) {
+  const { ctx, w, h } = fit($("cp-graph"));
+  const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.32;
+  const at = i => [cx + R * Math.cos(-Math.PI / 2 + i * Math.PI / 2),
+                   cy + R * Math.sin(-Math.PI / 2 + i * Math.PI / 2)];
+
+  for (let i = 0; i < 4; i++) {
+    const src = d.sources[i];
+    if (src < 0) continue;
+    const [sx, sy] = at(src), [tx, ty] = at(i);
+    const angle = Math.atan2(ty - sy, tx - sx);
+    const pad = 22;
+    const x0 = sx + pad * Math.cos(angle), y0 = sy + pad * Math.sin(angle);
+    const x1 = tx - pad * Math.cos(angle), y1 = ty - pad * Math.sin(angle);
+    ctx.strokeStyle = d.cyclic ? "rgba(168,230,104,.85)" : "rgba(139,146,163,.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (src === i) {
+      ctx.arc(tx, ty - 20, 12, 0, Math.PI * 2);
+    } else {
+      ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - 9 * Math.cos(angle - Math.PI / 6), y1 - 9 * Math.sin(angle - Math.PI / 6));
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - 9 * Math.cos(angle + Math.PI / 6), y1 - 9 * Math.sin(angle + Math.PI / 6));
+    }
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = at(i);
+    ctx.fillStyle = i < 2 ? "#7b9aff" : "#ff7b9a";
+    ctx.globalAlpha = d.values[i] > 0 ? 1 : 0.35;
+    ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#14161c";
+    ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(d.names[i], x, y);
+    ctx.textAlign = "start"; ctx.textBaseline = "alphabetic";
+  }
+
+  drawBars($("cp-bars"), d.values, "rgba(123,154,255,.85)", "rgba(255,123,154,.85)");
+
+  const pat = fit($("cp-pattern"));
+  const cell = pat.w / 4;
+  for (let i = 0; i < 4; i++) {
+    const on = (d.pattern >> i) & 1;
+    pat.ctx.fillStyle = on ? "#a8e668" : "rgba(139,146,163,.25)";
+    pat.ctx.fillRect(i * cell + 3, 8, cell - 6, pat.h - 16);
+    pat.ctx.fillStyle = on ? "#14161c" : "#8b92a3";
+    pat.ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
+    pat.ctx.textAlign = "center";
+    pat.ctx.fillText(on ? "1" : "0", i * cell + cell / 2, pat.h / 2 + 4);
+    pat.ctx.textAlign = "start";
+  }
+
+  setBadge($("cp-wiring-b"), WIRING_KO[d.wiring] || d.wiring, d.cyclic ? "good" : "");
+  $("cp-tension").textContent = d.tension.toFixed(3);
+  $("cp-pattern-v").textContent = d.pattern.toString(2).padStart(4, "0");
+  $("cp-ticks").textContent = d.ticks;
+  const status = $("cp-status");
+  status.className = "status";
+  status.textContent = WIRING_TEXT[d.wiring] || "";
+}
+
 // ── wiring ─────────────────────────────────────────────────────────────────
 for (const tab of document.querySelectorAll(".tab")) {
   tab.addEventListener("click", () => {
@@ -712,15 +844,19 @@ const SLIDERS = [
   ["pl-sep", "pl-sep-v", "pipeline"],
   ["bs-eps", "bs-eps-v", "base"],
   ["bs-sep", "bs-sep-v", "base"],
+  ["cp-gain", "cp-gain-v", "coupled"],
 ];
 for (const [input, output, engine] of SLIDERS) {
   const el = $(input), out = $(output);
-  el.addEventListener("input", () => {
-    out.textContent = (el.value / 100).toFixed(2);
-    pushControls(engine);
-  });
-  out.textContent = (el.value / 100).toFixed(2);
+  // 이득만 0.5~8.0 범위라 10으로 나눈다 — 나머지 슬라이더는 전부 0~1 비율이다.
+  const divisor = input === "cp-gain" ? 10 : 100;
+  const digits = divisor === 10 ? 1 : 2;
+  const sync = () => { out.textContent = (el.value / divisor).toFixed(digits); };
+  el.addEventListener("input", () => { sync(); pushControls(engine); });
+  sync();
 }
+
+$("cp-wiring").addEventListener("change", () => pushControls("coupled"));
 
 for (const button of document.querySelectorAll("[data-reset]")) {
   button.addEventListener("click", () => {

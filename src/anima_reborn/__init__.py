@@ -31,6 +31,8 @@ Two more pieces sit alongside them:
     iit4/         Integrated Information Theory 4.0 — how much a system is one
                   thing rather than parts. Ported from the hexa engine in
                   `dancinlab/selfhost-work`, and bit-exact against it.
+    coupled.py    the gap as a channel — A and G reading each other, the one
+                  engine here whose integration is bought by its own wiring
     substrate.py  the bridge: drive an engine from every state, measure its
                   transition matrix, and hand it to Phi.
     words.py      words as a drive — with the null control that stops an
@@ -39,17 +41,23 @@ Two more pieces sit alongside them:
 
 from __future__ import annotations
 
+from .coupled import CoupledEngine, CoupledState, Wiring
 from .crystal import CrystalState, CrystalVerdict, TimeCrystal, autocorrelation
 from .emergence import EmergenceEngine, EmergenceMetrics
 from .info import Binning, Emergence, entropy, joint_entropy, mutual_information
 from .pipeline import Pipeline, PipelineState
 from .repulsion import Mood, RepulsionField, RepulsionState
 from .substrate import (
+    CoupledReading,
+    RecurrenceEvidence,
     SubstrateReading,
     binarize,
     crystal_matrix,
     crystal_phi,
+    coupled_matrix,
+    coupled_phi,
     estimate_matrix,
+    recurrence_evidence,
 )
 from .words import WordReading, blake_scalar, drive, measure
 
@@ -57,6 +65,9 @@ __version__ = "0.1.0"
 
 __all__ = [
     "Binning",
+    "CoupledEngine",
+    "CoupledReading",
+    "CoupledState",
     "CrystalState",
     "CrystalVerdict",
     "Emergence",
@@ -65,14 +76,18 @@ __all__ = [
     "Mood",
     "Pipeline",
     "PipelineState",
+    "RecurrenceEvidence",
     "RepulsionField",
     "RepulsionState",
     "SubstrateReading",
     "TimeCrystal",
+    "Wiring",
     "WordReading",
     "autocorrelation",
     "binarize",
     "blake_scalar",
+    "coupled_matrix",
+    "coupled_phi",
     "crystal_matrix",
     "crystal_phi",
     "drive",
@@ -81,4 +96,5 @@ __all__ = [
     "joint_entropy",
     "measure",
     "mutual_information",
+    "recurrence_evidence",
 ]

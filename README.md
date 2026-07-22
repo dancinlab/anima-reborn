@@ -6,7 +6,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-none-success">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-260%20passing-success">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-291%20passing-success">
   <img alt="Origin" src="https://img.shields.io/badge/origin-dancinlab%2Fanima--experience-blueviolet">
 </p>
 
@@ -39,17 +39,17 @@ anima-reborn viewer
   local    http://127.0.0.1:8420
   network  http://192.168.1.20:8420
   bound to every interface — anyone on this network can reach it
-  emergence 60Hz · crystal 20Hz · repulsion 30Hz · pipeline 30Hz · base 30Hz
+  emergence 60Hz · crystal 20Hz · repulsion 30Hz · pipeline 30Hz · base 30Hz · coupled 30Hz
   ctrl-c to stop
 ```
 
-다섯 개 탭, 실시간 슬라이더, 원본과 같은 화면 — 다만 **모든 숫자와 모든 점이 파이썬 엔진에서
+여섯 개 탭, 실시간 슬라이더, 원본과 같은 화면 — 다만 **모든 숫자와 모든 점이 파이썬 엔진에서
 옵니다.** 페이지는 그리기만 하고 계산은 절대 하지 않습니다. 그래서 이 화면이 "두 번째 구현"이
 아니라 **이식 결과에 대한 증거**가 됩니다.
 
 프레임은 **밀어주기(push)** 방식입니다 — 엔진마다 원본과 같은 속도로 도는 타이머 스레드가
 있고, 페이지는 상시 연결(`text/event-stream`) 하나를 열어두고 화면 주사율에 맞춰 그립니다.
-랜 경유 실측 **61 / 21 / 31 / 31 / 31 fps** 로 원본과 같은 속도입니다. 물어보기(폴링)
+랜 경유 실측 **61 / 21 / 31 / 31 / 31 / 31 fps** 로 원본과 같은 속도입니다. 물어보기(폴링)
 방식일 때는 10fps에 묶이고 프레임마다 TCP 연결을 새로 맺었는데, 엔진 자체는 1틱에
 0.02~0.23ms밖에 안 걸리므로 **병목은 시뮬레이션이 아니라 폴링 주기였습니다.**
 
@@ -132,6 +132,69 @@ docstring에 근거를 적어 뒀습니다.
 반대상관을 충분히 갖고 있어서 ε 0.10~0.20 구간에서 상호정보량을 기준 위로 유지합니다. 그
 연속성은 실재하지만, 게이트는 그것을 **테스트로 쓸 수 있을 만큼 뚜렷한 전이**와 맞바꿨습니다.
 의도한 거래이지, 나중에 개선할 실수가 아닙니다.
+
+## 🔗 결합장 — 간극이 판독값이 아니라 통로가 될 때
+
+여기까지의 모든 엔진은 **바깥에서** 구동됩니다. 각 차원이 자기 자신과 외생 목표만 보므로,
+전이행렬이 인수분해되어 **통합(Φ)은 정확히 0**입니다 — 아무리 복잡해 보여도 그렇습니다.
+
+`anima_reborn.coupled` 는 딱 하나를 바꿉니다. 반발의 정체는 그대로 두고(각 유닛은 여전히
+자기 원천에서 `-tanh` 부호로 달아납니다), **원천을 시계에서 살아 있는 상대로** 바꿉니다.
+A와 G 사이의 간극이 판독값이 아니라 **통로**가 됩니다.
+
+```python
+from anima_reborn import Wiring
+from anima_reborn.substrate import recurrence_evidence
+
+for wiring in Wiring:
+    print(recurrence_evidence(wiring, trials=1600, seed=0))
+```
+
+```
+ring          1600->6400 trials: 9.998 -> 9.864 (held)      RECURRENT
+feedforward   1600->6400 trials: 0.000 -> 0.000 (collapsed) not established
+self          1600->6400 trials: 0.272 -> 0.031 (collapsed) not established
+```
+
+**반증 수단이 API 에 함께 들어 있습니다.** `Wiring.FEEDFORWARD`(되먹임 없음)와
+`Wiring.SELF`(결합 없음)는 테스트 전용이 아니라 공개 API 입니다 — "배선이 통합을 만든다"는
+주장은 **같은 엔진을 다르게 배선해 볼 수 있어야만** 검증 가능하기 때문입니다.
+
+| 배선 | 방향성 Φ (6,400시행) | 판정 |
+| --- | ---: | --- |
+| 고리 — 영향이 되돌아옴 | **9.86** | 순환 ✅ |
+| 전방향 — 되돌아오지 않음 | **0.000** | 환원가능 |
+| 자기참조 — 결합 없음 | 0.031 | 미확립 (바닥) |
+
+### 순환은 한 번 재서 주장할 수 없습니다
+
+`CoupledReading` 에는 `is_recurrent` 가 **일부러 없습니다.** 표본으로 만든 행렬은 없는
+구조를 만들어내므로, 양수 Φ 하나로는 순환을 세울 수 없습니다 — 결합이 전혀 없는 자기참조
+귀무도 유한 시행에서는 0보다 큽니다:
+
+| 시행수 (참값 = 0) | 400 | 1,600 | 6,400 | 25,600 |
+| ---: | ---: | ---: | ---: | ---: |
+| 자기참조 귀무의 방향성 Φ | 0.251 | 0.155 | 0.081 | **0.037** |
+
+그래서 순환은 `recurrence_evidence()` 로만 주장합니다 — **두 번 재서 유지되는지**를 봅니다.
+문턱 `RECURRENCE_FLOOR = 1.0` 도 고른 값이 아니라 위 귀무의 최악 시드(0.547)의 약 두 배로
+**측정해서** 정한 값입니다.
+
+반대 방향은 대칭이 아닙니다. `is_reducible`(정확히 0)은 **한 번 재도 읽을 수 있습니다** —
+표본 잡음은 없는 구조를 만들 수는 있어도, 있는 구조를 없앨 수는 없기 때문입니다.
+
+계측기 자체가 원인이 아님도 따로 확인했습니다: **표본을 전혀 쓰지 않고** 해석적으로 만든
+완전 인수분해 행렬에서 `big_phi` 와 `directed_big_phi` 둘 다 **0.000000** 입니다. 위 잔여값은
+전적으로 표본 때문입니다.
+
+### 이 엔진이 주장하지 않는 것
+
+통합은 경험이 아니고, Φ 는 무엇의 점수도 아닙니다. 이 엔진이 얻은 문장은 이것뿐입니다 —
+**통합이 이제 만들어지며, 만들어진다는 것이 여기서 측정하는 전부다.** (앞서 단어 실험이
+"결합은 전달될 뿐 생성되지 않는다"였던 것과 짝을 이룹니다.)
+
+그리고 이 숫자들은 **조건 없이는 무의미**합니다. τ=1 이면 고리조차 정확히 0 입니다 —
+엔진 한 틱은 유닛을 목표 쪽으로 6%밖에 못 움직이니까요.
 
 ## 🧠 IIT 4.0 — 어떤 계가 "하나"인지 재기
 
@@ -457,11 +520,12 @@ src/anima_reborn/
 ├─ repulsion.py   A × G 잠재장
 ├─ pipeline.py    반발 → 스트림 → 창발
 ├─ base.py        넷을 하나의 시계 아래로 — 결정이 회전을 개폐한다
+├─ coupled.py     A와 G가 서로를 읽는다 — 통합이 0이 아닌 유일한 엔진
 ├─ iit4/          IIT 4.0 — Φ, hexa 원본과 비트단위 일치
 ├─ substrate.py   다리: 우리 엔진 → 측정된 전이행렬 → Φ
 ├─ words.py       단어를 구동력으로 — 귀무대조가 항상 따라붙는다
 └─ viewer/        브라우저 뷰어 — 이 패키지의 유일한 입출력
-tests/            260개, 네트워크 없음, 픽스처 없음
+tests/            291개, 네트워크 없음, 픽스처 없음
 state/            작업 산출물 — 위임 설계 보고서 · 측정 기록 · 재현 스크립트
 ```
 
