@@ -59,12 +59,13 @@ from .substrate import (
     estimate_matrix,
     recurrence_evidence,
 )
-from .words import WordReading, blake_scalar, drive, measure
+from .words import Channel, WordReading, blake_scalar, drive, measure, measure_channel
 
 __version__ = "0.1.0"
 
 __all__ = [
     "Binning",
+    "Channel",
     "CoupledEngine",
     "CoupledReading",
     "CoupledState",
@@ -95,6 +96,7 @@ __all__ = [
     "estimate_matrix",
     "joint_entropy",
     "measure",
+    "measure_channel",
     "mutual_information",
     "recurrence_evidence",
 ]

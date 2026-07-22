@@ -6,7 +6,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-none-success">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-291%20passing-success">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-302%20passing-success">
   <img alt="Origin" src="https://img.shields.io/badge/origin-dancinlab%2Fanima--experience-blueviolet">
 </p>
 
@@ -404,6 +404,40 @@ print(measure(related, related))          # 같은 단어열을 A와 G 양쪽에
 서로 반대 방향으로 당긴다는 것이 이 실험의 실제 내용입니다 — 단어가 너무 빠르면 신호가
 사라지고, 창이 너무 짧으면 편향이 신호를 만들어 냅니다.
 
+### 그런데 결합 채널을 붙이면 — 전달이 생성이 된다
+
+위 결론("기판은 묶지 않는다")은 **결합이 없는 기판**에 대한 것입니다. `coupled.py` 가 만든
+살아 있는 고리에 같은 실험을 흘리면 결과가 뒤집힙니다. 각 엔진의 목표를
+`(1−λ)·자기 단어 + λ·(−상대 위치)` 로 섞고, **아무 관계도 없는 두 단어열**을 넣습니다.
+
+```python
+from anima_reborn.words import Channel, measure_channel
+
+print(measure_channel(words_a, words_g, channel=Channel.LIVE))   # 살아 있는 고리
+print(measure_channel(words_a, words_g, channel=Channel.YOKED))  # 대조군
+```
+
+λ=0.5 · 시드 8개 · 어휘 20단어:
+
+| 조건 | 초과분 | 8/8 양수? |
+| --- | ---: | --- |
+| 양방향 생중계 — 진짜 고리 | **+0.078** | 예 |
+| 단방향만 (a→g) | +0.008 | 예 |
+| **요크 재생 — 양쪽 다 녹음** | **−0.000** | 아니오 |
+| 채널 없음 (λ=0) | −0.002 | 아니오 |
+
+**요크 재생이 이 숫자에 의미를 줍니다.** 상대와 똑같은 모양의 통계를 주되 생중계만 끊는
+대조군인데, 여기서 효과가 죽습니다 → 만든 것은 **살아 있는 고리**이지 "상대 모양 입력"이
+아닙니다. 대조군을 만들다 **두 번 오염**시켰고 둘 다 잡았습니다 (한쪽 방향을 안 끊은 것,
+두 녹음을 같은 원본에서 뽑아 공유원인을 넣은 것 — `state/coupling/RESULTS.md`).
+
+함께 적어야 할 조건 둘: **창 크기와 무관**하고(실질표본 400/800/1600에서 동일 → 추정기
+인공물이 아님), **입력이 담은 것에 비례**합니다(어휘 10단어 +0.039 · 20단어 +0.078 —
+채널은 묶을 것이 있어야 묶습니다).
+
+**크기는 과장하지 않습니다.** 실재하고 일관되지만(8/8) 창발 기준 0.30에는 한참 못 미칩니다.
+정직한 표현은 **"측정 가능한 생성된 의존"** 이지 창발이 아닙니다.
+
 ### 인코딩에 대하여
 
 단어를 숫자로 바꾸는 규칙은 **호출자가 정합니다.** 그 규칙이 — 단어가 아니라 — 절대값을
@@ -525,7 +559,7 @@ src/anima_reborn/
 ├─ substrate.py   다리: 우리 엔진 → 측정된 전이행렬 → Φ
 ├─ words.py       단어를 구동력으로 — 귀무대조가 항상 따라붙는다
 └─ viewer/        브라우저 뷰어 — 이 패키지의 유일한 입출력
-tests/            291개, 네트워크 없음, 픽스처 없음
+tests/            302개, 네트워크 없음, 픽스처 없음
 state/            작업 산출물 — 위임 설계 보고서 · 측정 기록 · 재현 스크립트
 ```
 

@@ -24,11 +24,13 @@ from anima_reborn.pipeline import DAMPING, PULL, WALK
 from anima_reborn.substrate import estimate_matrix
 from anima_reborn.words import (
     HOLD,
+    Channel,
     MIN_EFFECTIVE_SAMPLES,
     WINDOW,
     blake_scalar,
     drive,
     measure,
+    measure_channel,
 )
 
 VOCAB = ["고양이", "자동차", "바다", "연필", "하늘", "돌멩이", "웃음", "기차", "빵", "별"]
@@ -393,3 +395,117 @@ class TestReading:
             sequence(seed=7), sequence(seed=7), hold=10, window=5000, seed=1
         )
         assert reading.effective_samples == 500
+
+
+class TestCreatedBinding:
+    """The sentence this module previously proved false.
+
+    `measure` shows an uncoupled substrate only ever transmits what its inputs
+    already shared. `measure_channel` asks whether a live loop can *create*
+    dependence between inputs that share nothing — and it can, modestly.
+
+    Measured at coupling 0.5 over eight seeds with this file's ten-word
+    vocabulary: live +0.039, one-way +0.008, yoked -0.000, no channel -0.002.
+    Stable across window sizes (400 / 800 / 1600 effective samples), so it is
+    not the estimator; a twenty-word vocabulary doubles it to +0.078, because a
+    channel can only bind what the inputs carried.
+    """
+
+    @staticmethod
+    def excesses(channel: Channel, *, coupling: float = 0.5, seeds: int = 8):
+        a, g = sequence(seed=7), sequence(seed=8)
+        return [
+            measure_channel(
+                a, g, channel=channel, coupling=coupling,
+                window=WINDOW_FAST, seed=s,
+            ).excess
+            for s in range(seeds)
+        ]
+
+    def test_a_live_loop_creates_dependence_from_independent_words(self) -> None:
+        """The claim. Neither word stream knows anything about the other."""
+        values = self.excesses(Channel.LIVE)
+        assert all(v > 0.02 for v in values), values
+        assert statistics.mean(values) > 0.03
+
+    def test_the_yoked_control_kills_it(self) -> None:
+        """The decisive control, and the reason the number above means anything.
+
+        Both engines read recordings: same drive law, same partner-shaped
+        statistics, no live channel. If the dependence survived this it would
+        have been in the input all along.
+        """
+        values = self.excesses(Channel.YOKED)
+        assert statistics.mean(values) < 0.01, values
+        assert not all(v > 0 for v in values), "a dead control must not be one-signed"
+
+    def test_the_yoked_recordings_must_not_share_a_source(self) -> None:
+        """A control can be contaminated as easily as a measurement.
+
+        Two recordings cut from one word sequence correlate, and two engines
+        fed correlated tapes have a shared cause — which reads as binding. That
+        version measured +0.006 on every seed. Independent draws give -0.000.
+        """
+        assert statistics.mean(self.excesses(Channel.YOKED)) < 0.005
+
+    def test_half_a_loop_creates_less_than_a_whole_one(self) -> None:
+        one_way = statistics.mean(self.excesses(Channel.ONE_WAY))
+        live = statistics.mean(self.excesses(Channel.LIVE))
+        assert one_way > 0.004
+        assert live > 3 * one_way
+
+    def test_the_effect_is_not_the_window(self) -> None:
+        """An estimator artefact would move with the sample count. This does
+        not: +0.039 at 400, 800 and 1600 effective samples alike."""
+        a, g = sequence(seed=7), sequence(seed=8)
+        readings = [
+            statistics.mean(
+                measure_channel(
+                    a, g, channel=Channel.LIVE, window=HOLD * n, seed=s
+                ).excess
+                for s in range(4)
+            )
+            for n in (400, 1600)
+        ]
+        assert readings[1] == pytest.approx(readings[0], abs=0.015), readings
+
+    def test_the_effect_grows_with_what_the_inputs_carry(self) -> None:
+        """A channel can only bind what was there to bind. Doubling the
+        vocabulary doubles the created dependence."""
+        wide = VOCAB + ["구름", "의자", "강물", "종이", "산", "모래", "노래", "버스", "밥", "달"]
+        rng = random.Random(3)
+        a = [rng.choice(wide) for _ in range(200)]
+        g = [rng.choice(wide) for _ in range(200)]
+        rich = statistics.mean(
+            measure_channel(
+                a, g, channel=Channel.LIVE, window=WINDOW_FAST, seed=s
+            ).excess
+            for s in range(8)
+        )
+        assert rich > 1.5 * statistics.mean(self.excesses(Channel.LIVE))
+
+    def test_no_channel_is_no_binding(self) -> None:
+        values = self.excesses(Channel.NONE)
+        assert statistics.mean(values) < 0.01
+        assert not all(v > 0 for v in values)
+
+    def test_coupling_zero_disables_the_channel(self) -> None:
+        """Whatever the channel says, nothing is read at coupling zero."""
+        values = self.excesses(Channel.LIVE, coupling=0.0)
+        assert statistics.mean(values) < 0.01
+
+    def test_the_effect_grows_with_coupling(self) -> None:
+        readings = [
+            statistics.mean(self.excesses(Channel.LIVE, coupling=c, seeds=4))
+            for c in (0.0, 0.25, 0.5)
+        ]
+        assert readings == sorted(readings), readings
+
+    def test_created_binding_is_below_the_emergence_bar(self) -> None:
+        """Stated as a test so the size cannot be quietly overclaimed. This is
+        measurable created dependence, not emergence."""
+        assert statistics.mean(self.excesses(Channel.LIVE)) < 0.30
+
+    def test_coupling_is_validated(self) -> None:
+        with pytest.raises(ValueError, match=r"coupling must be in \[0, 1\]"):
+            measure_channel(sequence(seed=1), sequence(seed=2), coupling=1.5)
