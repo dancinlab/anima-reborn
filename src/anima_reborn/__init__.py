@@ -25,6 +25,14 @@ The engines:
 
 Every engine is a class you step yourself: no threads, no timers, no clock of
 its own. Pass `seed=` for a reproducible run.
+
+Two more pieces sit alongside them:
+
+    iit4/         Integrated Information Theory 4.0 — how much a system is one
+                  thing rather than parts. Ported from the hexa engine in
+                  `dancinlab/selfhost-work`, and bit-exact against it.
+    substrate.py  the bridge: drive an engine from every state, measure its
+                  transition matrix, and hand it to Phi.
 """
 
 from __future__ import annotations
@@ -34,6 +42,13 @@ from .emergence import EmergenceEngine, EmergenceMetrics
 from .info import Binning, Emergence, entropy, joint_entropy, mutual_information
 from .pipeline import Pipeline, PipelineState
 from .repulsion import Mood, RepulsionField, RepulsionState
+from .substrate import (
+    SubstrateReading,
+    binarize,
+    crystal_matrix,
+    crystal_phi,
+    estimate_matrix,
+)
 
 __version__ = "0.1.0"
 
@@ -49,9 +64,14 @@ __all__ = [
     "PipelineState",
     "RepulsionField",
     "RepulsionState",
+    "SubstrateReading",
     "TimeCrystal",
     "autocorrelation",
+    "binarize",
+    "crystal_matrix",
+    "crystal_phi",
     "entropy",
+    "estimate_matrix",
     "joint_entropy",
     "mutual_information",
 ]

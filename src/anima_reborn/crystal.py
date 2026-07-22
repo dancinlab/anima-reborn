@@ -130,6 +130,10 @@ class TimeCrystal:
         beta: Inverse temperature.
         history: Magnetization samples kept for the autocorrelations.
         seed: Fixes both the initial spins and the dynamics.
+        initial: Starting spins, each +1 or -1. Defaults to a random ring. Pass
+            an explicit one to start from a known configuration — measuring the
+            ring's transition probabilities means driving it from every state in
+            turn. `reset` re-randomizes regardless.
     """
 
     def __init__(
@@ -141,6 +145,7 @@ class TimeCrystal:
         beta: float = INVERSE_TEMPERATURE,
         history: int = HISTORY,
         seed: int | None = None,
+        initial: Sequence[int] | None = None,
     ) -> None:
         if size < 3:
             raise ValueError(f"size must be >= 3 for a ring, got {size}")
@@ -150,7 +155,16 @@ class TimeCrystal:
         self.coupling = coupling
         self.beta = beta
         self._rng = random.Random(seed)
-        self._spins = [1 if self._rng.random() < 0.5 else -1 for _ in range(size)]
+        if initial is None:
+            self._spins = [1 if self._rng.random() < 0.5 else -1 for _ in range(size)]
+        else:
+            if len(initial) != size:
+                raise ValueError(
+                    f"initial must have {size} spins, got {len(initial)}"
+                )
+            if any(s not in (1, -1) for s in initial):
+                raise ValueError("every spin must be +1 or -1")
+            self._spins = [int(s) for s in initial]
         self._history: deque[float] = deque(maxlen=history)
 
     @property

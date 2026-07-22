@@ -6,7 +6,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-none-success">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-100%20passing-success">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-185%20passing-success">
   <img alt="Origin" src="https://img.shields.io/badge/origin-dancinlab%2Fanima--experience-blueviolet">
 </p>
 
@@ -139,6 +139,78 @@ tension=0.42 H(L)=3.35 H(R)=3.41 MI=1.905 [emergent]
 Collapse the engines and there is no shared information to find. Hold them apart and it
 appears.
 
+## 🧠 IIT 4.0 — measuring whether a system is one thing
+
+`anima_reborn.iit4` is a port of the hexa Integrated Information Theory 4.0 engine in
+`dancinlab/selfhost-work`. It computes Phi: cut a system in two, ask what the kindest cut
+still destroys, and take that as the measure of how much the system was a whole rather
+than parts sitting together.
+
+```python
+from anima_reborn.iit4 import TransitionMatrix, big_phi, find_complex
+
+coupled = TransitionMatrix([0, 0,  0, 1,  1, 0,  1, 1], 2)   # each unit becomes the other
+alone   = TransitionMatrix([0, 0,  1, 0,  0, 1,  1, 1], 2)   # each unit becomes itself
+
+print(big_phi(coupled, 0b11))   # big-phi=2.000000 ... [irreducible]
+print(big_phi(alone,   0b11))   # big-phi=0.000000 ... [reducible]
+```
+
+The chain is `tpm` → `distinction` → `relation` → `bigphi` → `exclusion`, plus `ei` for a
+cheap lower bound when Phi itself is out of reach.
+
+**Parity.** The port is checked against the hexa engine with **exact float equality** on
+eleven cases, across phi, the structure total, both phi sums, and the distinction count —
+all bit-identical. Phi is an argmax over partitions, so a last-bit change can select a
+different partition and move the answer discontinuously; a tolerance would hide exactly
+the drift worth catching.
+
+**Carve-outs, inherited and not closed.** Partitions are all bipartitions of
+mechanism-and-purview, not IIT 4.0's own partition set. big-Phi is structure destroyed by
+the system cut, not a re-derivation on the partitioned matrix. Relations are second-order
+only. Nothing is calibrated against PyPhi. Treat the numbers as this engine's output.
+
+## 🔬 Putting the two together — does Phi arise in our own engines?
+
+`anima_reborn.substrate` drives an engine from every state it could be in, measures the
+transition matrix that results, and hands it to Phi. The time crystal is the natural
+subject: its state is already binary, and it has a knob that tunes exactly how much
+causal structure it has.
+
+The prediction is sharp, because the crystal's two mechanisms do different things. The
+drive flips every spin **independently**, so it can integrate nothing. The Ising coupling,
+where each spin answers to its neighbours, is the only thing that can. So Phi should
+follow the coupling and die when the drive's noise drowns it — and the noise is maximal
+at `epsilon = 0.5`, where each flip is a fair coin.
+
+Measured, four spins, 400 trials per state:
+
+| epsilon | 0.00 | 0.02 | 0.05 | 0.20 | **0.50** | 0.80 | 1.00 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Phi | 2.93 | 3.52 | 3.70 | 2.80 | **0.10** | 2.31 | 2.92 |
+
+Phi collapses at the noise maximum and recovers symmetrically on both sides — what
+matters is how *determined* the drive is, not which way it goes. The prediction held.
+
+**The residual at `epsilon = 0.5` is not integration.** True Phi there is zero; a measured
+matrix is a sample, and sampling noise alone manufactures apparent structure. It shrinks
+with the trial count, which is how you can tell:
+
+| trials | 100 | 400 | 1 600 | 6 400 | 25 600 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| mean Phi at pure noise | 0.58 | 0.30 | 0.15 | 0.10 | 0.03 |
+| mean Phi at `epsilon = 0.05` | 3.32 | 3.47 | 2.73 | 2.63 | — |
+
+So a run at the default trial count reports about 0.3 bits of pure artefact. Both the
+floor and its decay are pinned in `tests/test_substrate.py`, so the artefact cannot be
+mistaken for a finding.
+
+**What cannot be compared.** The crystal's period-2 lock verdict was calibrated on a
+64-spin ring; Phi is only computable up to six units. At four spins the verdict disagrees
+with the same epsilon at sixty-four, so Phi and the lock have no shared size to be
+compared at. This package therefore claims no relationship between them in either
+direction — there is a test pinning the disagreement so the limitation stays visible.
+
 ## Reading the mutual-information numbers honestly
 
 The estimator is the plain plug-in one, exactly as the original runs it — no bias
@@ -170,8 +242,10 @@ src/anima_reborn/
 ├─ crystal.py     driven Ising ring
 ├─ repulsion.py   A × G latent field
 ├─ pipeline.py    repulsion → streams → emergence
+├─ iit4/          Integrated Information Theory 4.0 — Phi, bit-exact vs hexa
+├─ substrate.py   the bridge: our engines → measured TPM → Phi
 └─ viewer/        the browser view — the only I/O in the package
-tests/            100 tests, no network, no fixtures
+tests/            185 tests, no network, no fixtures
 ```
 
 Every engine is a class you step yourself, with `seed=` for reproducibility, `run(n)` to
