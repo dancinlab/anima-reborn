@@ -33,6 +33,8 @@ Two more pieces sit alongside them:
                   `dancinlab/selfhost-work`, and bit-exact against it.
     coupled.py    the gap as a channel — A and G reading each other, the one
                   engine here whose integration is bought by its own wiring
+    align.py      the only module that learns — two modalities brought to one
+                  place by co-occurrence, scored on concepts never trained on
     substrate.py  the bridge: drive an engine from every state, measure its
                   transition matrix, and hand it to Phi.
     words.py      words as a drive — with the null control that stops an
@@ -41,6 +43,7 @@ Two more pieces sit alongside them:
 
 from __future__ import annotations
 
+from .align import AlignState, Aligner
 from .coupled import CoupledEngine, CoupledState, Wiring
 from .crystal import CrystalState, CrystalVerdict, TimeCrystal, autocorrelation
 from .emergence import EmergenceEngine, EmergenceMetrics
@@ -64,6 +67,8 @@ from .words import Channel, WordReading, blake_scalar, drive, measure, measure_c
 __version__ = "0.1.0"
 
 __all__ = [
+    "AlignState",
+    "Aligner",
     "Binning",
     "Channel",
     "CoupledEngine",

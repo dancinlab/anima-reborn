@@ -15,6 +15,7 @@ Rendering, timers and DOM wiring stay in the origin; only the maths lives here.
 | `pipeline.py` | repulsion → sampled streams → emergence | pipeline tab |
 | `base.py` | all four under the crystal's clock — rotation only while LOCKED | (new — not in the origin) |
 | `coupled.py` | A and G reading each other — the only engine here with nonzero integration | (new — not in the origin) |
+| `align.py` | the only module that LEARNS — co-occurrence teaches two modalities to meet | (new — not in the origin) |
 | `substrate.py` | drive an engine from every state → measured TPM → Phi | (new — not in the origin) |
 | `words.py` | words as a continuing drive, always paired with a null control | (new — not in the origin) |
 
@@ -26,6 +27,13 @@ unit reads itself and something exogenous, which is why Phi is zero by architect
 the source is a live partner. Its falsifiers ship as part of its API (`Wiring.FEEDFORWARD`,
 `Wiring.SELF`) rather than living only in tests — the claim is that the wiring is what
 produces the integration, and that is only checkable if the other wirings are reachable.
+
+`align.py` is the only module that changes with experience, and it earns that by
+measurement rather than ambition: dynamics alone cannot canonicalize, because the evidence
+that two signals are one concept must be IN the signals and co-occurrence is what puts it
+there. Its falsifier (`shuffled=True`) is public API for the same reason the wirings are.
+Two rules it must keep — score only on held-out concepts, and report the gain over the
+learner's OWN untrained baseline, which is not zero.
 
 `base.py` is the one module here that is **not** a port: it composes the four under a
 single mortal clock. Its thesis, its measured constant `EPSILON`, and the line between

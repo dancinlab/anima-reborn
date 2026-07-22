@@ -5,7 +5,7 @@ ported to Python, what they compose into once they share a clock (`base.py`), an
 IIT 4.0 engine to measure the result with (`iit4/`, bit-exact against its hexa origin).
 
 Layout: `info` · `emergence` · `crystal` · `repulsion` · `pipeline` · `base` · `iit4/` ·
-`coupled` · `substrate` · `words` · `viewer/`, with work outputs in `state/`. Every folder carries its
+`coupled` · `align` · `substrate` · `words` · `viewer/`, with work outputs in `state/`. Every folder carries its
 own `CLAUDE.md`, and the local one wins.
 
 ## doc-language
@@ -43,6 +43,10 @@ own `CLAUDE.md`, and the local one wins.
 ## claims-need-controls
 - do: Ship every claim with the null that could fake it — recurrence via `recurrence_evidence`, word binding via a time-shift null, Phi with state/threshold/tau/trials
 - dont: A verdict property on ONE sampled reading · a threshold picked rather than measured against its own null
+
+## learning-honesty
+- do: Score a learner ONLY on held-out items, and report the gain over its own untrained baseline — which is measured, not assumed zero
+- dont: A verdict on a raw score · a learner with no control that removes what is supposed to teach it
 
 ## engine-purity
 - do: Standard library only · zero runtime deps · every engine reproducible under `seed=` · all I/O confined to `viewer/`

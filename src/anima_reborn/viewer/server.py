@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from ..align import Aligner
 from ..base import BaseEngine
 from ..coupled import NAMES as COUPLED_NAMES, CoupledEngine, Wiring
 from ..crystal import TimeCrystal
@@ -53,6 +54,7 @@ TICK_RATES = {
     "pipeline": 30.0,
     "base": 30.0,
     "coupled": 30.0,
+    "align": 60.0,
 }
 """Ticks per second, carried from the origin's `setInterval` periods so the
 engines run at the speed their thresholds were chosen against."""
@@ -257,6 +259,48 @@ class _CoupledHandler:
         }
 
 
+class _AlignHandler:
+    """The learner.
+
+    Scoring is far more expensive than learning, so `describe` reads `state`
+    once per frame while the ticker takes many steps between frames — the cost
+    ratio the engine's own docstring warns about, respected here.
+    """
+
+    @staticmethod
+    def configure(engine: Aligner, params: dict[str, list[str]]) -> None:
+        engine.rate = max(1e-4, _number(params, "rate", engine.rate))
+        engine.noise = max(0.0, _number(params, "noise", engine.noise))
+        wanted = params.get("shuffled")
+        if wanted:
+            shuffled = wanted[0] == "1"
+            if shuffled is not engine.shuffled:
+                engine.shuffled = shuffled
+                engine.reset()  # a different training regime is a different run
+
+    @staticmethod
+    def describe(engine: Aligner) -> dict[str, Any]:
+        state = engine.state
+        # One held-out concept, drawn the same way every frame, so the page can
+        # show where its two modalities currently land.
+        left = engine.project(engine.observe(10_000, modality=0), modality=0)
+        right = engine.project(engine.observe(10_000, modality=1), modality=1)
+        return {
+            "same": state.same_concept,
+            "different": state.different_concept,
+            "gap": state.gap,
+            "initial_gap": state.initial_gap,
+            "learned": state.learned,
+            "aligned": state.aligned,
+            "pairs": state.pairs_seen,
+            "shuffled": engine.shuffled,
+            "rate": engine.rate,
+            "noise": engine.noise,
+            "left": _round(left),
+            "right": _round(right),
+        }
+
+
 _HANDLERS: dict[str, Any] = {
     "emergence": _EmergenceHandler,
     "crystal": _CrystalHandler,
@@ -264,6 +308,7 @@ _HANDLERS: dict[str, Any] = {
     "pipeline": _PipelineHandler,
     "base": _BaseHandler,
     "coupled": _CoupledHandler,
+    "align": _AlignHandler,
 }
 
 
@@ -377,6 +422,7 @@ class Viewer:
             "pipeline": Pipeline(seed=seed),
             "base": BaseEngine(seed=seed),
             "coupled": CoupledEngine(seed=seed),
+            "align": Aligner(seed=seed),
         }
         self._engines = {
             name: _Guarded(engine, threading.Lock())
