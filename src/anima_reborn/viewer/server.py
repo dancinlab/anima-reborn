@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from ..base import BaseEngine
 from ..crystal import TimeCrystal
 from ..emergence import EmergenceEngine
 from ..pipeline import Pipeline
@@ -49,6 +50,7 @@ TICK_RATES = {
     "crystal": 20.0,
     "repulsion": 30.0,
     "pipeline": 30.0,
+    "base": 30.0,
 }
 """Ticks per second, carried from the origin's `setInterval` periods so the
 engines run at the speed their thresholds were chosen against."""
@@ -181,11 +183,43 @@ class _PipelineHandler:
         }
 
 
+class _BaseHandler:
+    @staticmethod
+    def configure(engine: BaseEngine, params: dict[str, list[str]]) -> None:
+        engine.epsilon = _clamp(_number(params, "epsilon", engine.epsilon), 0.0, 1.0)
+        engine.separation = _clamp(
+            _number(params, "separation", engine.separation), 0.0, 2.0
+        )
+
+    @staticmethod
+    def describe(engine: BaseEngine) -> dict[str, Any]:
+        state = engine.state
+        return {
+            "a": _round(engine.a),
+            "g": _round(engine.g),
+            "left": _round(engine.left),
+            "right": _round(engine.right),
+            "magnetization": _round(engine.magnetization),
+            "range": engine.binning.vrange,
+            "phase": state.phase,
+            "tension": state.tension,
+            "h_left": state.h_left,
+            "h_right": state.h_right,
+            "mi": state.mutual_information,
+            "verdict": state.verdict.value,
+            "rhythm": state.crystal.verdict.value,
+            "ac1": state.crystal.ac1,
+            "ac2": state.crystal.ac2,
+            "ticks": engine.ticks,
+        }
+
+
 _HANDLERS: dict[str, Any] = {
     "emergence": _EmergenceHandler,
     "crystal": _CrystalHandler,
     "repulsion": _RepulsionHandler,
     "pipeline": _PipelineHandler,
+    "base": _BaseHandler,
 }
 
 
@@ -297,6 +331,7 @@ class Viewer:
             "crystal": TimeCrystal(epsilon=0.05, seed=seed),
             "repulsion": RepulsionField(seed=seed),
             "pipeline": Pipeline(seed=seed),
+            "base": BaseEngine(seed=seed),
         }
         self._engines = {
             name: _Guarded(engine, threading.Lock())

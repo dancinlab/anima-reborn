@@ -38,7 +38,7 @@ has no such knob because its rate belongs to the server.
 Polling capped the frame rate at the poll interval and paid a TCP handshake per frame
 (`BaseHTTPRequestHandler` defaults to HTTP/1.0). Measured: engines cost 0.02–0.23 ms per
 tick and a LAN round trip is 1.1 ms, so nothing but the poll loop stood between this
-viewer and the origin's 60 fps. `TICK_RATES` carries the origin's `setInterval` periods,
+viewer and the origin's 60 fps. `TICK_RATES` carries the origin's `setInterval` periods (and 30 Hz for `base`, which has no origin),
 so an engine runs at the speed its thresholds were chosen against.
 
 `protocol_version = "HTTP/1.1"` enables keep-alive, which is why every non-streaming

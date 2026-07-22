@@ -13,11 +13,18 @@ Rendering, timers and DOM wiring stay in the origin; only the maths lives here.
 | `crystal.py` | driven Ising ring, period-2 lock | DTC tab (`dtc_demo.py`) |
 | `repulsion.py` | A × G latent field | A × G tab (moods from `tension_link.py`) |
 | `pipeline.py` | repulsion → sampled streams → emergence | pipeline tab |
+| `base.py` | all four under the crystal's clock — rotation only while LOCKED | (new — not in the origin) |
+| `substrate.py` | drive an engine from every state → measured TPM → Phi | (new — not in the origin) |
 
 `pipeline.py` imports `PHASE_RATE` / `PULL` / `DAMPING` from `repulsion.py` — the two
 engines share one drift law, and it is defined once.
 
-`viewer/` is the browser view of all four, and the one place in this package that does
+`base.py` is the one module here that is **not** a port: it composes the four under a
+single mortal clock. Its thesis, its measured constant `EPSILON`, and the line between
+what it designs in and what it discovers are all stated in its docstring — keep them
+there and keep them honest. `iit4/` has its own guide.
+
+`viewer/` is the browser view of all five, and the one place in this package that does
 I/O. The rules below apply to the engine files here, not to it — see its own guide.
 
 ## Rules for changes here

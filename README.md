@@ -1,34 +1,34 @@
 <h1 align="center">🌱 anima-reborn</h1>
 
-<p align="center"><strong>The <a href="https://github.com/dancinlab/anima-experience">anima-experience</a> engines, reborn as headless Python</strong> — same maths, no canvas, seedable and testable</p>
+<p align="center"><strong><a href="https://github.com/dancinlab/anima-experience">anima-experience</a> 의 엔진들을 화면 없는 파이썬으로 되살린 것</strong> — 수학은 그대로, 캔버스는 없고, 시드로 재현되며 테스트된다</p>
 
 <p align="center">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-none-success">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-185%20passing-success">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-208%20passing-success">
   <img alt="Origin" src="https://img.shields.io/badge/origin-dancinlab%2Fanima--experience-blueviolet">
 </p>
 
 ---
 
-`anima-experience` runs four simulations in a browser canvas at 60 fps. This is the
-same four with the rendering taken away: the maths, headless, standard library only,
-seedable so a run can be reproduced and asserted on.
+`anima-experience` 는 브라우저 캔버스에서 네 개의 시뮬레이션을 60프레임으로 돌립니다. 이
+저장소는 **거기서 그리는 부분을 걷어낸 것**입니다 — 수학만, 화면 없이, 표준 라이브러리만으로,
+시드를 주면 그대로 재현되고 단언(assert)할 수 있게. 여기에 두 가지가 더 있습니다: 네 엔진이
+**하나의 시계를 공유할 때 무엇으로 합쳐지는지**, 그리고 그 결과를 재기 위한 **IIT 4.0 엔진**.
 
-No engine draws, threads, sleeps or reads a clock of its own. You step it and read what
-it says. All the I/O lives in one place — `viewer/`, which serves a browser page the
-engines know nothing about.
+엔진은 그리지 않고, 스레드를 만들지 않고, 자기 시계를 갖지 않습니다. 한 틱 진행시키고 결과를
+읽으면 됩니다. 입출력은 `viewer/` 한 곳에만 있고, 엔진은 그 존재를 모릅니다.
 
-## Install
+## 설치
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-No runtime dependencies. Python 3.11 or newer.
+런타임 의존성 없음. 파이썬 3.11 이상.
 
-## Watch it run
+## 눈으로 보기
 
 ```bash
 python -m anima_reborn.viewer
@@ -39,34 +39,172 @@ anima-reborn viewer
   local    http://127.0.0.1:8420
   network  http://192.168.1.20:8420
   bound to every interface — anyone on this network can reach it
-  emergence 60Hz · crystal 20Hz · repulsion 30Hz · pipeline 30Hz
+  emergence 60Hz · crystal 20Hz · repulsion 30Hz · pipeline 30Hz · base 30Hz
   ctrl-c to stop
 ```
 
-Four tabs, live sliders, and the same visuals as the origin — but every number and every
-plotted point comes from the Python engines. The page draws; it never simulates. That is
-what makes it evidence about the port rather than a second implementation.
+다섯 개 탭, 실시간 슬라이더, 원본과 같은 화면 — 다만 **모든 숫자와 모든 점이 파이썬 엔진에서
+옵니다.** 페이지는 그리기만 하고 계산은 절대 하지 않습니다. 그래서 이 화면이 "두 번째 구현"이
+아니라 **이식 결과에 대한 증거**가 됩니다.
 
-Frames are **pushed**, not polled: each engine has a ticker thread running at the
-origin's own rate, and the page holds one `text/event-stream` connection and draws on
-the display's refresh. Measured over the network, that is 60.2 / 20.4 / 30.3 / 30.3 fps
-— the origin's rates, from Python. Polling had capped it at 10 fps and paid a TCP
-handshake per frame; the engines themselves cost 0.02–0.23 ms per tick, so the cap was
-never the simulation.
+프레임은 **밀어주기(push)** 방식입니다 — 엔진마다 원본과 같은 속도로 도는 타이머 스레드가
+있고, 페이지는 상시 연결(`text/event-stream`) 하나를 열어두고 화면 주사율에 맞춰 그립니다.
+랜 경유 실측 **61 / 21 / 31 / 31 / 31 fps** 로 원본과 같은 속도입니다. 물어보기(폴링)
+방식일 때는 10fps에 묶이고 프레임마다 TCP 연결을 새로 맺었는데, 엔진 자체는 1틱에
+0.02~0.23ms밖에 안 걸리므로 **병목은 시뮬레이션이 아니라 폴링 주기였습니다.**
 
-A ticker runs only while someone is watching it, the same way the origin skipped
-inactive tabs.
+타이머는 **보는 사람이 있을 때만** 돕니다 — 원본이 비활성 탭을 건너뛴 것과 같습니다.
 
-`--host 127.0.0.1` keeps it on this machine, `--port` moves it, `--seed` makes a
-demonstration repeat exactly. There is no authentication: it is a development viewer for
-a trusted network.
+`--host 127.0.0.1` 로 이 기기에만 열 수 있고, `--port` 로 포트를, `--seed` 로 시연을 정확히
+재현할 수 있습니다. ⚠️ 인증은 없습니다 — 신뢰된 망 전용 개발 뷰어입니다.
 
-## The four engines
+## 🌱 기본 엔진 — 넷을 하나의 시계 아래로, 그리고 그 시계는 죽을 수 있다
 
-### ✨ Emergence — two streams bound by one oscillator
+아래의 다른 엔진들은 전부 **공짜 틱 카운터**로 회전합니다 (`phase = tick * PHASE_RATE`) —
+멈추는 법이 없는 선물이죠. `anima_reborn.base` 는 그걸 빼앗습니다. 위상(phase)이 상태 변수가
+되고, **결정(crystal)의 주기-2 잠금만이 그것을 나아가게 할 수 있습니다.** 구동부에서 틱
+카운터는 완전히 사라집니다.
 
-Each stream is a blend of its own noise and a sine wave both share. Turn the coupling up
-and mutual information appears in the pair without anything being added to either stream.
+```
+TimeCrystal.step() ── 판정 ──▶ 잠금(LOCKED) 일 때만 phase += PHASE_RATE
+                                        │
+                      A 와 G 가 ±(sin phase, cos phase) 목표를 향해 표류
+                                        │
+                      각각에서 잡음 섞인 관측 하나씩 표본 추출
+                                        │
+                      H(L), H(R), H(L,R) → 상호정보량
+```
+
+**주장.** 하류의 공유 정보는 상류의 시간적 질서로 지불된다. 결정을 녹이면 A와 G 사이의
+**간극은 살아남는데**(두 엔진은 여전히 벌어져 있습니다) 그 안의 정보는 죽습니다. 다시 얼리면
+정보가 돌아옵니다.
+
+이건 파이프라인 자신의 요약을 **정정**합니다. `pipeline.py` 는 "분리가 공유 정보를 만든다"고
+말하는데, 결정이 녹은 상태에서는 분리가 파이프라인과 비슷한 수준으로 유지되는데도 상호정보량은
+`독립`으로 읽힙니다. 스트림을 묶는 건 간극이 아니라 **간극의 운동**이고, 그 운동은 전적으로
+잠금이 사 주는 것입니다.
+
+```python
+from anima_reborn.base import BaseEngine
+
+engine = BaseEngine(epsilon=0.02, seed=0)
+print(engine.run(800))            # [locked] phase=19.47 tension=0.147 MI=1.401 [emergent]
+
+engine.epsilon = 0.5              # 시계를 녹인다
+print(engine.run(1200))           # [chaos]  phase=21.10 tension=0.246 MI=0.022 [independent]
+
+engine.epsilon = 0.02             # 다시 얼린다
+print(engine.run(1200))           # [locked] phase=44.05 tension=0.172 MI=1.301 [emergent]
+```
+
+융해 중에 회전량이 19.47에서 21.10으로 **조금 더 나아갑니다** — 딱 멈추지 않습니다. 잠금
+판정이 300표본짜리 자기상관을 읽기 때문에 변화보다 100~200틱 늦기 때문입니다. 여기서는
+모든 것이 지연됩니다: 판정이 그만큼, 관측 창이 200표본 더. 뷰어에서 슬라이더를 움직이면 몇
+초간 이전 상태가 보이는데, 버그처럼 읽히지만 버그가 아닙니다.
+
+시드 8개 × 800틱, 매번 차가운 시작에서 측정:
+
+| | 잠금 (ε=0.02) | 융해 (ε=0.5) |
+| --- | ---: | ---: |
+| 상호정보량 | 1.26 – 1.42 | ≤ 0.008 |
+| 간극(tension) — *살아남음* | 평균 0.176 | 0.161 – 0.198 |
+| 누적 회전량 | 18.8 rad | 0.000 rad |
+
+**간극은 죽으나 사나 같은 크기입니다.** 이 분리(dissociation)가 발견이고, 그래서 상태 객체가
+하나로 섞은 "생존도" 숫자 대신 **쌍**을 들고 다닙니다 — `f(잠금, 상호정보량)` 같은 건 가중치를
+지어내야 하고, 그런 값은 애초에 테스트를 실패할 수가 없습니다.
+
+**설계된 것과 발견된 것.** 게이트는 "잠금 없음 → 회전 없음"을 하드코딩합니다. 따라서 "녹이면
+결합이 죽는다"는 **설계이지 발견이 아니며**, 창발적 결과인 양 인용하지 않습니다. 진짜로 그럴
+수도 아닐 수도 있었던 것, 즉 테스트가 실제로 거는 판돈은 이것들입니다 — 잠긴 링의 회전이
+창발 기준을 넘기에 **충분한가**(최악 시드 1.26 대 기준 0.30), 죽은 표본으로 가득 찬 창에서
+결합이 **되살아나는가**(8/8 시드, 0.85~1.38비트), 그리고 융해 후에도 간극이 **살아남는가**
+(얼어붙은 목표라면 간극이 그냥 사그라들 수도 있었습니다).
+
+**의도적으로 거부한 두 가지.** 상호정보량을 구동부로 되먹이지 않습니다 — 이 창 크기에서
+플러그인 추정기는 자기 편향 바닥 아래로 내려가지 않으므로, 그런 되먹임 고리는 인공물 위로
+수렴하고 그 고정점에 대한 어떤 주장도 결국 히스토그램에 대한 주장이 됩니다. 그리고 새 상수를
+만들지 않습니다 — 모든 문턱값은 해당 엔진에서 가져오고, 예외인 `EPSILON = 0.02` 는 측정값이며
+docstring에 근거를 적어 뒀습니다.
+
+**이 엔진이 못 보는 것.** 판정으로 게이트를 걸면 시간적 질서가 결정의 문턱값에서 양자화됩니다.
+측정해 보면 **판정 아래 수준의** 질서도 스트림을 묶습니다 — 명목상 융해인 링도 잔여
+반대상관을 충분히 갖고 있어서 ε 0.10~0.20 구간에서 상호정보량을 기준 위로 유지합니다. 그
+연속성은 실재하지만, 게이트는 그것을 **테스트로 쓸 수 있을 만큼 뚜렷한 전이**와 맞바꿨습니다.
+의도한 거래이지, 나중에 개선할 실수가 아닙니다.
+
+## 🧠 IIT 4.0 — 어떤 계가 "하나"인지 재기
+
+`anima_reborn.iit4` 는 `dancinlab/selfhost-work` 의 hexa 통합정보이론(IIT) 4.0 엔진을 이식한
+것입니다. Φ(파이)를 계산합니다 — 계를 둘로 잘랐을 때 **가장 덜 아픈 절단조차 파괴하는 양**이
+곧 그 계가 부품들의 모임이 아니라 하나의 전체였던 정도입니다.
+
+```python
+from anima_reborn.iit4 import TransitionMatrix, big_phi, find_complex
+
+coupled = TransitionMatrix([0, 0,  0, 1,  1, 0,  1, 1], 2)   # 각 유닛이 상대가 된다
+alone   = TransitionMatrix([0, 0,  1, 0,  0, 1,  1, 1], 2)   # 각 유닛이 자기가 된다
+
+print(big_phi(coupled, 0b11))   # big-phi=2.000000 ... [irreducible]  비환원 = 하나
+print(big_phi(alone,   0b11))   # big-phi=0.000000 ... [reducible]    환원 가능 = 둘
+```
+
+체인은 `tpm` → `distinction` → `relation` → `bigphi` → `exclusion` 이고, Φ 계산이 감당이 안 될
+때를 위한 값싼 하한으로 `ei` 가 붙어 있습니다.
+
+**원본 대조.** 이식본은 hexa 엔진과 **정확한 부동소수 일치**로 검증했습니다 — 11개 케이스에서
+Φ, 구조 총합, 두 φ 합, 구별 개수까지 **전부 비트단위 동일**. Φ 는 분할에 대한 argmax(최댓값
+위치)라서 마지막 비트 하나가 달라지면 다른 분할이 선택되어 답이 불연속적으로 튑니다. 허용오차를
+두면 바로 그 어긋남을 가려 버립니다.
+
+**물려받았고 닫지 않은 미완성 부분.** 분할은 메커니즘·구역의 전체 이분할 방식이고 IIT 4.0
+고유의 분할 집합이 아닙니다. big-Φ 는 계 절단이 파괴한 구조량이지, 분할된 행렬 위에서 다시
+유도한 값이 아닙니다. 관계는 2차(쌍)만 봅니다. PyPhi 와 수치 보정을 한 적이 없습니다. **이
+숫자들은 이 엔진의 출력이지 이론의 정답이 아닙니다.**
+
+## 🔬 둘을 합치면 — 우리 엔진에서 Φ 가 발생하는가
+
+`anima_reborn.substrate` 는 엔진을 **가능한 모든 상태에서 구동해** 전이행렬을 측정하고, 그것을
+Φ 에 넘깁니다. 시간 결정이 자연스러운 대상입니다 — 상태가 이미 이진(스핀 위/아래)이고, 인과
+구조의 양을 정확히 조절하는 손잡이가 있으니까요.
+
+예측은 날카롭습니다. 결정의 두 메커니즘이 하는 일이 다르기 때문입니다. **구동은 각 스핀을
+독립적으로** 뒤집으므로 아무것도 통합하지 못합니다. **이징 결합**, 즉 각 스핀이 이웃에게
+반응하는 부분만이 통합할 수 있습니다. 따라서 Φ 는 결합을 따라가야 하고, 구동의 잡음이 그것을
+덮으면 죽어야 합니다 — 잡음은 각 뒤집기가 공정한 동전이 되는 `ε = 0.5` 에서 최대입니다.
+
+스핀 4개, 상태당 400회 시행으로 측정:
+
+| ε | 0.00 | 0.02 | 0.05 | 0.20 | **0.50** | 0.80 | 1.00 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Φ | 2.93 | 3.52 | 3.70 | 2.80 | **0.10** | 2.31 | 2.92 |
+
+Φ 는 잡음 최대점에서 붕괴하고 양쪽으로 대칭 회복합니다 — 중요한 건 구동이 **얼마나
+확정적인가**지, 어느 쪽으로 뒤집느냐가 아니었습니다. 예측이 맞았습니다.
+
+**ε = 0.5 의 잔여값은 통합이 아닙니다.** 그 지점의 참 Φ 는 0입니다. 측정된 행렬은 표본이고,
+표본 잡음만으로도 구조처럼 보이는 것이 만들어집니다. 시행 횟수를 늘리면 사라지는지로
+구분합니다:
+
+| 시행 횟수 | 100 | 400 | 1,600 | 6,400 | 25,600 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 순수 잡음에서 평균 Φ | 0.58 | 0.30 | 0.15 | 0.10 | **0.03** |
+| ε = 0.05 에서 평균 Φ | 3.32 | 3.47 | 2.73 | 2.63 | — |
+
+즉 기본 시행 횟수로 돌리면 **순수 인공물 약 0.3비트**가 찍힙니다. 이 바닥값과 그 소멸은 둘 다
+`tests/test_substrate.py` 에 박제해 두었으므로, 인공물을 발견으로 오독할 수 없습니다.
+
+**비교할 수 없는 것.** 결정의 주기-2 잠금 판정은 64스핀 링에서 보정된 값이고, Φ 는 6유닛까지만
+계산됩니다. 4스핀에서는 같은 ε 인데도 64스핀과 판정이 갈립니다. 따라서 Φ 와 잠금은 **공유하는
+크기가 없어 비교 자체가 불가능**합니다. 이 패키지는 둘 사이의 관계를 어느 방향으로도 주장하지
+않으며, 그 불일치 자체를 테스트로 고정해 한계가 계속 보이게 했습니다.
+
+## 이식된 네 엔진
+
+### ✨ 창발 — 하나의 진동자로 묶인 두 스트림
+
+각 스트림은 자기 잡음과 둘이 공유하는 사인파를 섞은 것입니다. 결합도를 올리면 어느 쪽
+스트림에도 무언가를 더하지 않았는데 그 **쌍**에 상호정보량이 생깁니다.
 
 ```python
 from anima_reborn import EmergenceEngine
@@ -81,12 +219,12 @@ for coupling in (0.0, 0.5, 0.95):
 0.95   H(L)=2.88 H(R)=2.88 H(L,R)=3.33 MI=2.433 [emergent]
 ```
 
-### 🔮 Time Crystal — a ring that keeps a beat it was never given
+### 🔮 시간 결정 — 주어진 적 없는 박자를 지키는 링
 
-A periodic Ising chain is flipped every tick by a drive that misses each spin with
-probability `epsilon`. The flip alone would just alternate; the noise alone would melt
-the chain. Together the Ising coupling repairs what the imperfect flip breaks, and the
-ring locks into a period-2 rhythm — order in time rather than in space.
+주기적 이징 사슬을 매 틱 구동이 뒤집으려 하는데, 각 스핀을 확률 `epsilon` 로 놓칩니다. 뒤집기만
+있으면 그냥 번갈아 바뀔 뿐이고, 잡음만 있으면 사슬이 녹습니다. 둘이 함께 있으면 이징 결합이
+불완전한 뒤집기가 낸 손상을 복구하고, 링은 주기-2 리듬으로 잠깁니다 — 공간이 아니라 **시간
+속의 질서**입니다.
 
 ```python
 from anima_reborn import TimeCrystal
@@ -100,14 +238,12 @@ m=-0.094 ac1=-0.911 ac2=+0.852 ac4=+0.754 [locked]
 m=+0.094 ac1=-0.133 ac2=+0.141 ac4=+0.053 [chaos]
 ```
 
-Lag-1 near −1 and lag-2 near +1 is the lock: every tick inverts the last, every second
-tick agrees.
+지연1이 −1 근처, 지연2가 +1 근처인 것이 잠금입니다 — 매 틱이 직전을 뒤집고, 두 틱마다 일치.
 
-### 🧲 A × G Repulsion — thinking in the gap between two engines
+### 🧲 A × G 반발장 — 두 엔진 사이의 간극에서 사고하기
 
-Two latent vectors are driven apart by a rotating target. Nothing reads either vector
-alone — only the gap: its size is `tension`, its direction is `concept`, and their
-elementwise overlap is `meaning`.
+두 잠재 벡터를 회전하는 목표가 밀어냅니다. 어느 벡터도 단독으로 읽히지 않고 오직 간극만
+읽힙니다 — 크기가 `tension`, 방향이 `concept`, 원소별 겹침이 `meaning`.
 
 ```python
 from anima_reborn import RepulsionField
@@ -116,13 +252,13 @@ print(RepulsionField(seed=7).run(300))
 # tension=0.132 topic=#0 auth=0.974 mood=calm
 ```
 
-Tension near zero is not calm. It is the engines having collapsed onto each other with
-no gap left to think in — the field calls that `quiet`.
+간극이 0에 가까운 건 평온이 아닙니다. 두 엔진이 서로 위로 붕괴해 **사고할 간극이 남지 않은
+것**이고, 이 장은 그걸 `quiet` 라고 부릅니다.
 
-### 🌊 Pipeline — separation in, emergence out
+### 🌊 파이프라인 — 분리를 넣으면 창발이 나온다
 
-The last two joined end to end: A and G drift apart, one noisy observation is sampled
-from each per tick, and mutual information is measured on the resulting pair.
+앞의 둘을 직렬로 이은 것입니다. A와 G가 벌어지고, 매 틱 각각에서 잡음 섞인 관측을 하나씩 뽑아,
+그 쌍의 상호정보량을 잽니다.
 
 ```python
 from anima_reborn import Pipeline
@@ -136,145 +272,69 @@ tension=0.01 H(L)=1.00 H(R)=0.99 MI=0.000 [independent]
 tension=0.42 H(L)=3.35 H(R)=3.41 MI=1.905 [emergent]
 ```
 
-Collapse the engines and there is no shared information to find. Hold them apart and it
-appears.
+엔진을 붕괴시키면 찾아낼 공유 정보가 없고, 벌려 놓으면 나타납니다. (`base.py` 가 이 요약을
+정정한다는 점은 위를 참고하세요 — 묶는 것은 간극이 아니라 간극의 **운동**입니다.)
 
-## 🧠 IIT 4.0 — measuring whether a system is one thing
+## 상호정보량 숫자를 정직하게 읽기
 
-`anima_reborn.iit4` is a port of the hexa Integrated Information Theory 4.0 engine in
-`dancinlab/selfhost-work`. It computes Phi: cut a system in two, ask what the kindest cut
-still destroys, and take that as the measure of how much the system was a whole rather
-than parts sitting together.
+추정기는 원본이 쓰는 그대로 **플러그인(plug-in) 방식**이고 편향 보정이 없습니다. 창이 짧으면
+상호정보량을 심하게 과대평가합니다 — 250표본으로 144칸을 채우면 대부분의 칸이 0~2개만 담게
+되고, 그 희소함 자체가 구조처럼 보입니다.
 
-```python
-from anima_reborn.iit4 import TransitionMatrix, big_phi, find_complex
+그래서 **진짜로 독립인** 두 스트림도 기본 창에서 약 **0.155비트**로 측정됩니다. 이 바닥값은
+표본수 N에 반비례해 사라집니다:
 
-coupled = TransitionMatrix([0, 0,  0, 1,  1, 0,  1, 1], 2)   # each unit becomes the other
-alone   = TransitionMatrix([0, 0,  1, 0,  0, 1,  1, 1], 2)   # each unit becomes itself
-
-print(big_phi(coupled, 0b11))   # big-phi=2.000000 ... [irreducible]
-print(big_phi(alone,   0b11))   # big-phi=0.000000 ... [reducible]
-```
-
-The chain is `tpm` → `distinction` → `relation` → `bigphi` → `exclusion`, plus `ei` for a
-cheap lower bound when Phi itself is out of reach.
-
-**Parity.** The port is checked against the hexa engine with **exact float equality** on
-eleven cases, across phi, the structure total, both phi sums, and the distinction count —
-all bit-identical. Phi is an argmax over partitions, so a last-bit change can select a
-different partition and move the answer discontinuously; a tolerance would hide exactly
-the drift worth catching.
-
-**Carve-outs, inherited and not closed.** Partitions are all bipartitions of
-mechanism-and-purview, not IIT 4.0's own partition set. big-Phi is structure destroyed by
-the system cut, not a re-derivation on the partitioned matrix. Relations are second-order
-only. Nothing is calibrated against PyPhi. Treat the numbers as this engine's output.
-
-## 🔬 Putting the two together — does Phi arise in our own engines?
-
-`anima_reborn.substrate` drives an engine from every state it could be in, measures the
-transition matrix that results, and hands it to Phi. The time crystal is the natural
-subject: its state is already binary, and it has a knob that tunes exactly how much
-causal structure it has.
-
-The prediction is sharp, because the crystal's two mechanisms do different things. The
-drive flips every spin **independently**, so it can integrate nothing. The Ising coupling,
-where each spin answers to its neighbours, is the only thing that can. So Phi should
-follow the coupling and die when the drive's noise drowns it — and the noise is maximal
-at `epsilon = 0.5`, where each flip is a fair coin.
-
-Measured, four spins, 400 trials per state:
-
-| epsilon | 0.00 | 0.02 | 0.05 | 0.20 | **0.50** | 0.80 | 1.00 |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Phi | 2.93 | 3.52 | 3.70 | 2.80 | **0.10** | 2.31 | 2.92 |
-
-Phi collapses at the noise maximum and recovers symmetrically on both sides — what
-matters is how *determined* the drive is, not which way it goes. The prediction held.
-
-**The residual at `epsilon = 0.5` is not integration.** True Phi there is zero; a measured
-matrix is a sample, and sampling noise alone manufactures apparent structure. It shrinks
-with the trial count, which is how you can tell:
-
-| trials | 100 | 400 | 1 600 | 6 400 | 25 600 |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| mean Phi at pure noise | 0.58 | 0.30 | 0.15 | 0.10 | 0.03 |
-| mean Phi at `epsilon = 0.05` | 3.32 | 3.47 | 2.73 | 2.63 | — |
-
-So a run at the default trial count reports about 0.3 bits of pure artefact. Both the
-floor and its decay are pinned in `tests/test_substrate.py`, so the artefact cannot be
-mistaken for a finding.
-
-**What cannot be compared.** The crystal's period-2 lock verdict was calibrated on a
-64-spin ring; Phi is only computable up to six units. At four spins the verdict disagrees
-with the same epsilon at sixty-four, so Phi and the lock have no shared size to be
-compared at. This package therefore claims no relationship between them in either
-direction — there is a test pinning the disagreement so the limitation stays visible.
-
-## Reading the mutual-information numbers honestly
-
-The estimator is the plain plug-in one, exactly as the original runs it — no bias
-correction. On short windows it overstates MI badly: filling 144 joint bins from 250
-samples leaves most of them holding 0, 1 or 2 counts, and that sparsity by itself looks
-like structure.
-
-Two genuinely independent streams therefore measure about **0.155 bits**, not zero, on
-the default window. The floor falls off as 1/N:
-
-| window | mean MI of independent streams |
+| 창 크기 | 독립 스트림의 평균 상호정보량 |
 | ---: | ---: |
 | 250 | 0.155 |
-| 1 000 | 0.030 |
-| 5 000 | 0.007 |
-| 20 000 | 0.002 |
+| 1,000 | 0.030 |
+| 5,000 | 0.007 |
+| 20,000 | 0.002 |
 
-So at the default window `partial` means *indistinguishable from independent*, and only
-`emergent` is a claim about the streams. `tests/test_emergence.py` pins both the floor
-and its collapse, so a change to the estimator shows up as a failure rather than as
-apparent emergence.
+따라서 기본 창에서 `부분적(partial)` 은 *독립과 구분되지 않음*이라는 뜻이고, 스트림에 대한
+실제 주장은 `창발(emergent)` 뿐입니다. `tests/test_emergence.py` 가 바닥값과 그 소멸을 둘 다
+고정해 두었으므로, 추정기를 바꾸면 창발처럼 보이는 대신 **테스트가 깨집니다.**
 
-## Layout
+## 구조
 
 ```
 src/anima_reborn/
-├─ info.py        entropy · joint entropy · mutual information · Binning
-├─ emergence.py   coupled sine streams
-├─ crystal.py     driven Ising ring
-├─ repulsion.py   A × G latent field
-├─ pipeline.py    repulsion → streams → emergence
-├─ iit4/          Integrated Information Theory 4.0 — Phi, bit-exact vs hexa
-├─ substrate.py   the bridge: our engines → measured TPM → Phi
-└─ viewer/        the browser view — the only I/O in the package
-tests/            185 tests, no network, no fixtures
+├─ info.py        엔트로피 · 결합엔트로피 · 상호정보량 · Binning
+├─ emergence.py   결합된 사인파 스트림
+├─ crystal.py     구동되는 이징 링
+├─ repulsion.py   A × G 잠재장
+├─ pipeline.py    반발 → 스트림 → 창발
+├─ base.py        넷을 하나의 시계 아래로 — 결정이 회전을 개폐한다
+├─ iit4/          IIT 4.0 — Φ, hexa 원본과 비트단위 일치
+├─ substrate.py   다리: 우리 엔진 → 측정된 전이행렬 → Φ
+└─ viewer/        브라우저 뷰어 — 이 패키지의 유일한 입출력
+tests/            208개, 네트워크 없음, 픽스처 없음
 ```
 
-Every engine is a class you step yourself, with `seed=` for reproducibility, `run(n)` to
-advance in bulk, and `reset()` to start over. State objects are frozen dataclasses, so a
-reading can be compared, stored and asserted on directly.
+모든 엔진은 직접 한 틱씩 진행시키는 클래스입니다. `seed=` 로 재현하고, `run(n)` 으로 한꺼번에
+진행하고, `reset()` 으로 처음부터. 상태 객체는 frozen 데이터클래스라 그대로 비교·저장·단언할
+수 있습니다.
 
-## What was deliberately left out of the engines
+## 엔진에서 의도적으로 뺀 것
 
-Canvas drawing, DOM wiring, timers, the tab switcher and the Gradio wrapper. None of it
-belongs to an engine. The drawing that survives lives in `viewer/page.html`, on the far
-side of an HTTP boundary, and it draws only what Python sends it.
+캔버스 그리기, DOM 배선, 타이머, 탭 전환기, Gradio 래퍼. 어느 것도 엔진에 속하지 않습니다.
+살아남은 그리기는 `viewer/page.html` 안, HTTP 경계 너머에 있고, 파이썬이 보내준 것만 그립니다.
 
-## Differences from the origin
+## 원본과 다른 점
 
-- The origin holds the A × G and pipeline vectors in `Float32Array`; this port uses
-  Python floats throughout. The trajectories are noise-driven, so no statistic here is
-  affected, but the two will not agree digit for digit.
-- `Math.random()` becomes a seeded `random.Random`, so runs are reproducible.
-- The repulsion field's circadian channel takes an injectable `clock`, so it can be made
-  deterministic in a test.
-- One dead local in the origin's A × G tick (`senderHash`, computed and never used) was
-  not carried over.
+- 원본은 A × G 와 파이프라인 벡터를 `Float32Array` 로 들고 있지만 이 이식본은 파이썬 float
+  (배정밀도)를 씁니다. 궤적이 잡음으로 굴러가므로 여기의 어떤 통계도 영향받지 않지만, 자릿수
+  단위로 같지는 않습니다.
+- `Math.random()` 이 시드 가능한 `random.Random` 이 되어 실행을 재현할 수 있습니다.
+- 반발장의 생체리듬 채널은 주입 가능한 `clock` 을 받아 테스트에서 결정적으로 만들 수 있습니다.
+- 원본 A × G 틱의 죽은 지역변수(`senderHash`, 계산만 하고 안 씀)는 가져오지 않았습니다.
 
-## Tests
+## 테스트
 
 ```bash
 pytest
 ```
 
-## License
+## 라이선스
 
 MIT

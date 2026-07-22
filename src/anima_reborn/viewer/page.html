@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>anima-reborn — engine viewer</title>
+<title>anima-reborn — 엔진 뷰어</title>
 <style>
   :root {
     --bg: #14161c;
@@ -94,45 +94,46 @@
 <div class="wrap">
 
 <header>
-  <h1>🌱 anima-reborn — engine viewer</h1>
+  <h1>🌱 anima-reborn — 엔진 뷰어</h1>
   <div class="sub">
-    Every number and every pixel below comes from the Python engines in
-    <code>src/anima_reborn/</code>, pushed frame by frame. The page only draws.
+    아래의 모든 숫자와 점은 <code>src/anima_reborn/</code> 의 파이썬 엔진에서
+    프레임 단위로 밀려옵니다(push). 이 페이지는 <strong>그리기만</strong> 합니다.
   </div>
-  <div class="fps" id="fps">connecting…</div>
+  <div class="fps" id="fps">연결 중…</div>
 </header>
 
 <nav>
-  <button class="tab active" data-tab="emergence">✨ Emergence</button>
-  <button class="tab" data-tab="crystal">🔮 Time Crystal</button>
-  <button class="tab" data-tab="repulsion">🧲 A × G Repulsion</button>
-  <button class="tab" data-tab="pipeline">🌊 Pipeline</button>
+  <button class="tab active" data-tab="base">🌱 기본 엔진</button>
+  <button class="tab" data-tab="emergence">✨ 창발</button>
+  <button class="tab" data-tab="crystal">🔮 시간 결정</button>
+  <button class="tab" data-tab="repulsion">🧲 A × G 반발장</button>
+  <button class="tab" data-tab="pipeline">🌊 파이프라인</button>
 </nav>
 
 <!-- ── Emergence ──────────────────────────────────────────────────────── -->
-<section class="panel active" id="p-emergence">
+<section class="panel" id="p-emergence">
   <div class="card">
-    <h2>Two streams, one shared oscillator</h2>
+    <h2>두 스트림, 하나의 공유 진동자</h2>
     <p class="note">
-      Each stream blends its own noise with a sine wave both share. Raise the coupling
-      and information appears in the <em>pair</em> without anything being added to either
-      stream — the scatter collapses onto the diagonal.
+      각 스트림은 자기 잡음과 둘이 공유하는 사인파를 섞습니다. 결합도를 올리면
+      어느 쪽 스트림에도 무언가를 더하지 않았는데 <em>둘의 쌍</em>에 정보가 생깁니다 —
+      산점도가 대각선으로 모입니다.
     </p>
 
     <div class="controls">
-      <label class="ctl">coupling <input type="range" id="em-coupling" min="0" max="100" value="50"><b id="em-coupling-v">0.50</b></label>
-      <button class="act" data-reset="emergence">reset</button>
+      <label class="ctl">결합도 <input type="range" id="em-coupling" min="0" max="100" value="50"><b id="em-coupling-v">0.50</b></label>
+      <button class="act" data-reset="emergence">초기화</button>
     </div>
 
     <div class="grid-scatter">
       <div>
-        <p class="label">stream L / stream R</p>
+        <p class="label">스트림 L / 스트림 R</p>
         <canvas id="em-l" height="120"></canvas>
         <div style="height:10px"></div>
         <canvas id="em-r" height="120"></canvas>
       </div>
       <div>
-        <p class="label">L vs R</p>
+        <p class="label">L 대 R</p>
         <canvas id="em-scatter" height="260"></canvas>
       </div>
     </div>
@@ -141,8 +142,8 @@
       <div class="metric"><div class="k">H(L)</div><div class="v" id="em-hl">—</div></div>
       <div class="metric"><div class="k">H(R)</div><div class="v" id="em-hr">—</div></div>
       <div class="metric"><div class="k">H(L,R)</div><div class="v" id="em-hj">—</div></div>
-      <div class="metric"><div class="k">mutual information</div><div class="v" id="em-mi">—</div></div>
-      <div class="metric"><div class="k">verdict</div><div class="v"><span class="badge" id="em-badge">—</span></div></div>
+      <div class="metric"><div class="k">상호정보량</div><div class="v" id="em-mi">—</div></div>
+      <div class="metric"><div class="k">판정</div><div class="v"><span class="badge" id="em-badge">—</span></div></div>
     </div>
     <div class="status" id="em-status"></div>
   </div>
@@ -151,30 +152,30 @@
 <!-- ── Time crystal ───────────────────────────────────────────────────── -->
 <section class="panel" id="p-crystal">
   <div class="card">
-    <h2>A ring that keeps a beat it was never given</h2>
+    <h2>주어진 적 없는 박자를 스스로 지키는 링</h2>
     <p class="note">
-      Every tick the drive tries to flip all 64 spins and misses each with probability ε,
-      then the Ising coupling repairs the damage. Small ε and the ring locks into a
-      period-2 rhythm; push ε up and the crystal melts.
+      매 틱마다 구동이 64개 스핀을 전부 뒤집으려 하고 각각을 확률 ε 로 놓칩니다.
+      그 손상을 이징(Ising) 결합이 복구합니다. ε 이 작으면 링은 주기-2 리듬으로 잠기고,
+      ε 을 올리면 결정이 녹습니다.
     </p>
 
     <div class="controls">
-      <label class="ctl">ε (miss rate) <input type="range" id="cr-eps" min="0" max="60" value="5"><b id="cr-eps-v">0.05</b></label>
-      <button class="act" data-reset="crystal">reset</button>
+      <label class="ctl">ε (실패율) <input type="range" id="cr-eps" min="0" max="60" value="5"><b id="cr-eps-v">0.05</b></label>
+      <button class="act" data-reset="crystal">초기화</button>
     </div>
 
-    <p class="label">spin chain</p>
+    <p class="label">스핀 사슬</p>
     <canvas id="cr-spins" height="56"></canvas>
     <div style="height:12px"></div>
-    <p class="label">magnetization over time</p>
+    <p class="label">시간에 따른 자화</p>
     <canvas id="cr-mag" height="150"></canvas>
 
     <div class="metrics">
-      <div class="metric"><div class="k">magnetization</div><div class="v" id="cr-m">—</div></div>
-      <div class="metric"><div class="k">autocorr lag 1</div><div class="v" id="cr-ac1">—</div></div>
-      <div class="metric"><div class="k">lag 2</div><div class="v" id="cr-ac2">—</div></div>
-      <div class="metric"><div class="k">lag 4</div><div class="v" id="cr-ac4">—</div></div>
-      <div class="metric"><div class="k">verdict</div><div class="v"><span class="badge" id="cr-badge">—</span></div></div>
+      <div class="metric"><div class="k">자화</div><div class="v" id="cr-m">—</div></div>
+      <div class="metric"><div class="k">자기상관 지연1</div><div class="v" id="cr-ac1">—</div></div>
+      <div class="metric"><div class="k">지연2</div><div class="v" id="cr-ac2">—</div></div>
+      <div class="metric"><div class="k">지연4</div><div class="v" id="cr-ac4">—</div></div>
+      <div class="metric"><div class="k">판정</div><div class="v"><span class="badge" id="cr-badge">—</span></div></div>
     </div>
     <div class="status" id="cr-status"></div>
   </div>
@@ -183,32 +184,32 @@
 <!-- ── Repulsion ──────────────────────────────────────────────────────── -->
 <section class="panel" id="p-repulsion">
   <div class="card">
-    <h2>Thinking in the gap between two engines</h2>
+    <h2>두 엔진 사이의 간극에서 사고하기</h2>
     <p class="note">
-      Nothing reads engine A or engine G alone — only the gap between them. Its size is
-      tension, its direction is concept, their overlap is meaning. Drop the separation to
-      zero and the engines collapse together: not calm, but nothing left to think with.
+      엔진 A도 G도 단독으로는 읽히지 않습니다 — 오직 둘 사이의 간극만 읽힙니다.
+      간극의 크기가 tension, 방향이 concept, 겹침이 meaning 입니다. 분리도를 0으로 내리면
+      두 엔진이 하나로 붕괴합니다 — 평온한 게 아니라, 사고할 거리가 사라진 것입니다.
     </p>
 
     <div class="controls">
-      <label class="ctl">separation <input type="range" id="rp-sep" min="0" max="150" value="60"><b id="rp-sep-v">0.60</b></label>
-      <label class="ctl">noise <input type="range" id="rp-noise" min="0" max="100" value="20"><b id="rp-noise-v">0.20</b></label>
-      <button class="act" data-reset="repulsion">reset</button>
+      <label class="ctl">분리도 <input type="range" id="rp-sep" min="0" max="150" value="60"><b id="rp-sep-v">0.60</b></label>
+      <label class="ctl">잡음 <input type="range" id="rp-noise" min="0" max="100" value="20"><b id="rp-noise-v">0.20</b></label>
+      <button class="act" data-reset="repulsion">초기화</button>
     </div>
 
     <div class="grid-scatter">
       <div>
-        <p class="label">phase plane — A, G and the repulsion vector</p>
+        <p class="label">위상평면 — A, G 그리고 반발 벡터</p>
         <canvas id="rp-phase" height="280"></canvas>
       </div>
       <div>
-        <p class="label">authenticity</p>
+        <p class="label">진정성(authenticity)</p>
         <canvas id="rp-auth" height="70"></canvas>
         <div style="height:12px"></div>
-        <p class="label">context (8ch)</p>
+        <p class="label">맥락 (8채널)</p>
         <canvas id="rp-context" height="80"></canvas>
         <div style="height:12px"></div>
-        <p class="label">sender (4ch)</p>
+        <p class="label">발신자 서명 (4채널)</p>
         <canvas id="rp-sender" height="70"></canvas>
       </div>
     </div>
@@ -216,21 +217,21 @@
     <div style="height:12px"></div>
     <div class="grid2">
       <div>
-        <p class="label">concept — direction of disagreement</p>
+        <p class="label">concept — 불일치의 방향</p>
         <canvas id="rp-concept" height="100"></canvas>
       </div>
       <div>
-        <p class="label">meaning — A × G elementwise</p>
+        <p class="label">meaning — A × G 원소별 곱</p>
         <canvas id="rp-meaning" height="100"></canvas>
       </div>
     </div>
 
     <div class="metrics">
-      <div class="metric"><div class="k">tension</div><div class="v" id="rp-tension">—</div></div>
-      <div class="metric"><div class="k">topic axis</div><div class="v" id="rp-topic">—</div></div>
-      <div class="metric"><div class="k">curiosity</div><div class="v" id="rp-cur">—</div></div>
-      <div class="metric"><div class="k">authenticity</div><div class="v" id="rp-auth-v">—</div></div>
-      <div class="metric"><div class="k">mood</div><div class="v"><span class="badge" id="rp-mood">—</span></div></div>
+      <div class="metric"><div class="k">간극(tension)</div><div class="v" id="rp-tension">—</div></div>
+      <div class="metric"><div class="k">주제 축</div><div class="v" id="rp-topic">—</div></div>
+      <div class="metric"><div class="k">호기심</div><div class="v" id="rp-cur">—</div></div>
+      <div class="metric"><div class="k">진정성</div><div class="v" id="rp-auth-v">—</div></div>
+      <div class="metric"><div class="k">기분</div><div class="v"><span class="badge" id="rp-mood">—</span></div></div>
     </div>
     <div class="status" id="rp-status"></div>
   </div>
@@ -239,51 +240,104 @@
 <!-- ── Pipeline ───────────────────────────────────────────────────────── -->
 <section class="panel" id="p-pipeline">
   <div class="card">
-    <h2>Separation in, emergence out</h2>
+    <h2>분리를 넣으면 창발이 나온다</h2>
     <p class="note">
-      The last two engines joined end to end: A and G drift apart, one noisy observation
-      is sampled from each per tick, and mutual information is measured on the resulting
-      pair. Collapse the engines and there is no shared information left to find.
+      앞의 두 엔진을 직렬로 이은 것입니다 — A와 G가 벌어지고, 매 틱마다 각각에서
+      잡음 섞인 관측을 하나씩 뽑아, 그 쌍의 상호정보량을 잽니다.
+      두 엔진을 붕괴시키면 찾아낼 공유 정보가 남지 않습니다.
     </p>
 
     <div class="controls">
-      <label class="ctl">separation <input type="range" id="pl-sep" min="0" max="150" value="60"><b id="pl-sep-v">0.60</b></label>
-      <button class="act" data-reset="pipeline">reset</button>
+      <label class="ctl">분리도 <input type="range" id="pl-sep" min="0" max="150" value="60"><b id="pl-sep-v">0.60</b></label>
+      <button class="act" data-reset="pipeline">초기화</button>
     </div>
 
     <div class="grid-scatter">
       <div>
-        <p class="label">engine phase plane</p>
+        <p class="label">엔진 위상평면</p>
         <canvas id="pl-phase" height="220"></canvas>
       </div>
       <div>
-        <p class="label">L vs R</p>
+        <p class="label">L 대 R</p>
         <canvas id="pl-scatter" height="220"></canvas>
       </div>
     </div>
 
     <div style="height:12px"></div>
-    <p class="label">sampled streams</p>
+    <p class="label">표본 추출된 두 스트림</p>
     <canvas id="pl-l" height="100"></canvas>
     <div style="height:10px"></div>
     <canvas id="pl-r" height="100"></canvas>
 
     <div class="metrics">
-      <div class="metric"><div class="k">tension</div><div class="v" id="pl-tension">—</div></div>
+      <div class="metric"><div class="k">간극(tension)</div><div class="v" id="pl-tension">—</div></div>
       <div class="metric"><div class="k">H(L)</div><div class="v" id="pl-hl">—</div></div>
       <div class="metric"><div class="k">H(R)</div><div class="v" id="pl-hr">—</div></div>
-      <div class="metric"><div class="k">mutual information</div><div class="v" id="pl-mi">—</div></div>
-      <div class="metric"><div class="k">verdict</div><div class="v"><span class="badge" id="pl-badge">—</span></div></div>
+      <div class="metric"><div class="k">상호정보량</div><div class="v" id="pl-mi">—</div></div>
+      <div class="metric"><div class="k">판정</div><div class="v"><span class="badge" id="pl-badge">—</span></div></div>
     </div>
     <div class="status" id="pl-status"></div>
   </div>
 </section>
 
+<!-- ── Base engine ────────────────────────────────────────────────────── -->
+<section class="panel active" id="p-base">
+  <div class="card">
+    <h2>네 엔진을 하나의 시계 아래로 — 그리고 그 시계는 죽을 수 있다</h2>
+    <p class="note">
+      다른 탭에서는 A–G 목표가 공짜 틱 카운터로 회전합니다. 여기서는 회전을
+      <em>사야</em> 합니다 — 결정(crystal)이 주기-2 잠금을 유지하는 동안에만 위상이 나아갑니다.
+      링을 녹여 보세요. A와 G 사이의 <strong>간극은 그대로 남는데</strong>, 그 안의 정보는 죽습니다.
+      다시 얼리면 정보가 돌아옵니다.
+    </p>
+
+    <div class="controls">
+      <label class="ctl">ε (구동 실패율) <input type="range" id="bs-eps" min="0" max="60" value="2"><b id="bs-eps-v">0.02</b></label>
+      <label class="ctl">분리도 <input type="range" id="bs-sep" min="0" max="150" value="60"><b id="bs-sep-v">0.60</b></label>
+      <button class="act" data-reset="base">초기화</button>
+    </div>
+
+    <p class="note" style="margin:-4px 0 14px">
+      모든 것이 지연됩니다 — 잠금 판정은 변화보다 100~200틱 늦고, 관측 창이 200개를 더 더합니다.
+      그래서 슬라이더를 움직여도 몇 초간 이전 상태가 보입니다. 뷰어 버그가 아니라 기판의 성질입니다.
+    </p>
+
+    <div class="grid-scatter">
+      <div>
+        <p class="label">A ⇄ G 위상평면 — 잠금 중에만 구동</p>
+        <canvas id="bs-phase" height="240"></canvas>
+      </div>
+      <div>
+        <p class="label">시계 — 링 자화(magnetization)</p>
+        <canvas id="bs-mag" height="110"></canvas>
+        <div style="height:12px"></div>
+        <p class="label">누적 회전량</p>
+        <canvas id="bs-rot" height="110"></canvas>
+      </div>
+    </div>
+
+    <div style="height:12px"></div>
+    <p class="label">표본 추출된 두 스트림</p>
+    <canvas id="bs-l" height="96"></canvas>
+    <div style="height:10px"></div>
+    <canvas id="bs-r" height="96"></canvas>
+
+    <div class="metrics">
+      <div class="metric"><div class="k">리듬</div><div class="v"><span class="badge" id="bs-rhythm">—</span></div></div>
+      <div class="metric"><div class="k">위상 (라디안)</div><div class="v" id="bs-phase-v">—</div></div>
+      <div class="metric"><div class="k">간극(tension) — 살아남음</div><div class="v" id="bs-tension">—</div></div>
+      <div class="metric"><div class="k">상호정보량</div><div class="v" id="bs-mi">—</div></div>
+      <div class="metric"><div class="k">결합</div><div class="v"><span class="badge" id="bs-badge">—</span></div></div>
+    </div>
+    <div class="status" id="bs-status"></div>
+  </div>
+</section>
+
 <footer>
-  On the default 250-sample window the plug-in estimator reports about
-  <b>0.155 bits</b> for genuinely independent streams — a small-sample artefact, not
-  coupling. So <b>partial</b> means “indistinguishable from independent”; only
-  <b>emergent</b> is a claim about the streams.
+  기본 창 크기(250표본)에서는 <strong>완전히 독립인</strong> 두 스트림도 상호정보량이
+  약 <b>0.155비트</b>로 찍힙니다 — 결합이 아니라 표본이 적어서 생기는 인공물입니다.
+  그래서 이 화면의 <b>부분적</b>은 “독립과 구분되지 않음”이라는 뜻이고,
+  스트림에 대한 실제 주장은 <b>창발</b>뿐입니다.
 </footer>
 
 </div>
@@ -426,24 +480,32 @@ function drawSpins(canvas, spins) {
 
 // ── badges ─────────────────────────────────────────────────────────────────
 const EMERGENCE_CLASS = { emergent: "good", partial: "mid", independent: "bad" };
+// 표시 문자열만 한글로 바꾼다. 배지 색은 위의 원래 값(raw)으로 판정하고,
+// 매핑에 없는 값은 원문 그대로 노출한다 — 없는 번역을 지어내지 않기 위해서다.
+const KO = {
+  emergent: "창발", partial: "부분적", independent: "독립",
+  locked: "잠금", building: "형성 중", chaos: "융해",
+  surprised: "놀람", excited: "격앙", thoughtful: "사려", calm: "평온", quiet: "고요",
+};
+const ko = v => KO[v] || v;
 const EMERGENCE_TEXT = {
-  emergent: "Emergent ✨ — the pair carries information neither stream holds alone.",
-  partial: "Partial — at this window size that is indistinguishable from independent.",
-  independent: "Independent — the streams share nothing.",
+  emergent: "창발 ✨ — 어느 스트림도 혼자서는 갖지 못한 정보를 둘의 쌍이 담고 있습니다.",
+  partial: "부분적 — 이 창 크기에서는 독립과 구분되지 않는 수준입니다.",
+  independent: "독립 — 두 스트림이 공유하는 정보가 없습니다.",
 };
 const CRYSTAL_CLASS = { locked: "good", building: "mid", chaos: "bad" };
 const CRYSTAL_TEXT = {
-  locked: "Locked ✨ — period-2 rhythm, anti-phase with the drive and holding.",
-  building: "Building — lag-1 has gone anti-phase, lag-2 has not caught up yet.",
-  chaos: "Melted — the imperfection outran the Ising repair.",
+  locked: "잠금 ✨ — 주기-2 리듬. 구동과 반대 위상으로 맞물려 유지되고 있습니다.",
+  building: "형성 중 — 지연1은 반대 위상으로 갔지만 지연2가 아직 따라오지 못했습니다.",
+  chaos: "융해 — 구동의 불완전함이 이징 복구를 앞질렀습니다.",
 };
 const MOOD_CLASS = { surprised: "mid", excited: "bad", thoughtful: "good", calm: "good", quiet: "" };
 const MOOD_TEXT = {
-  surprised: "Tension jumped this tick.",
-  excited: "Sustained high tension — the engines are far apart.",
-  thoughtful: "A working gap between the engines.",
-  calm: "A small but real gap.",
-  quiet: "The engines have collapsed together — no gap left to think in.",
+  surprised: "이번 틱에 간극이 급변했습니다.",
+  excited: "높은 간극이 지속 — 두 엔진이 크게 벌어져 있습니다.",
+  thoughtful: "사고가 일어나는 크기의 간극입니다.",
+  calm: "작지만 실재하는 간극입니다.",
+  quiet: "두 엔진이 하나로 붕괴 — 사고할 간극이 남지 않았습니다.",
 };
 
 function setBadge(el, text, cls) {
@@ -455,9 +517,10 @@ function setBadge(el, text, cls) {
 // The server pushes a frame per engine tick over one long-lived connection.
 // Frames are stashed, not drawn on arrival; drawing happens on the display's
 // own refresh, so a burst of frames costs one repaint rather than several.
-const PREFIX = { emergence: "em", crystal: "cr", repulsion: "rp", pipeline: "pl" };
+const PREFIX = { emergence: "em", crystal: "cr", repulsion: "rp", pipeline: "pl", base: "bs" };
+const ROTATION = [];   // recent accumulated phase, so a stalled clock is visible
 
-let active = "emergence";
+let active = "base";
 let stream = null;
 let pending = null;          // newest frame not yet drawn
 let received = 0;            // frames since the last rate sample
@@ -468,6 +531,7 @@ function controlsFor(name) {
   if (name === "emergence") return { coupling: $("em-coupling").value / 100 };
   if (name === "crystal") return { epsilon: $("cr-eps").value / 100 };
   if (name === "repulsion") return { separation: $("rp-sep").value / 100, noise: $("rp-noise").value / 100 };
+  if (name === "base") return { epsilon: $("bs-eps").value / 100, separation: $("bs-sep").value / 100 };
   return { separation: $("pl-sep").value / 100 };
 }
 
@@ -475,6 +539,7 @@ function connect(name) {
   if (stream) stream.close();
   pending = null;
   received = drawn = 0;
+  ROTATION.length = 0;   // a stale span would distort the next rotation trace
 
   const params = new URLSearchParams(controlsFor(name));
   stream = new EventSource(`/api/${name}/stream?${params}`);
@@ -491,7 +556,7 @@ function connect(name) {
   stream.onerror = () => {
     const status = $(PREFIX[name] + "-status");
     status.className = "status err";
-    status.textContent = "stream interrupted — reconnecting…";
+    status.textContent = "스트림 끊김 — 재연결 중…";
   };
 }
 
@@ -512,8 +577,8 @@ function frame() {
 requestAnimationFrame(frame);
 
 setInterval(() => {
-  $("fps").textContent = `${received} fps in · ${drawn} drawn` +
-    (engineRate ? ` · engine ${Math.round(engineRate)} Hz` : "");
+  $("fps").textContent = `수신 ${received} fps · 그림 ${drawn}` +
+    (engineRate ? ` · 엔진 ${Math.round(engineRate)} Hz` : "");
   received = drawn = 0;
 }, 1000);
 
@@ -521,6 +586,7 @@ function render(name, data) {
   if (name === "emergence") renderEmergence(data);
   else if (name === "crystal") renderCrystal(data);
   else if (name === "repulsion") renderRepulsion(data);
+  else if (name === "base") renderBase(data);
   else renderPipeline(data);
 }
 
@@ -532,7 +598,7 @@ function renderEmergence(d) {
   const status = $("em-status");
   status.className = "status";
   if (!d.metrics) {
-    status.textContent = `filling the window — ${d.left.length}/50 samples before the entropies mean anything.`;
+    status.textContent = `창을 채우는 중 — 엔트로피가 의미를 가지려면 ${d.left.length}/50 표본이 필요합니다.`;
     return;
   }
   const m = d.metrics;
@@ -540,7 +606,7 @@ function renderEmergence(d) {
   $("em-hr").textContent = m.h_right.toFixed(2);
   $("em-hj").textContent = m.h_joint.toFixed(2);
   $("em-mi").textContent = m.mi.toFixed(3);
-  setBadge($("em-badge"), m.verdict, EMERGENCE_CLASS[m.verdict]);
+  setBadge($("em-badge"), ko(m.verdict), EMERGENCE_CLASS[m.verdict]);
   status.textContent = EMERGENCE_TEXT[m.verdict];
 }
 
@@ -552,7 +618,7 @@ function renderCrystal(d) {
   $("cr-ac1").textContent = sign(d.ac1);
   $("cr-ac2").textContent = sign(d.ac2);
   $("cr-ac4").textContent = sign(d.ac4);
-  setBadge($("cr-badge"), d.verdict, CRYSTAL_CLASS[d.verdict]);
+  setBadge($("cr-badge"), ko(d.verdict), CRYSTAL_CLASS[d.verdict]);
   const status = $("cr-status");
   status.className = "status";
   status.textContent = CRYSTAL_TEXT[d.verdict];
@@ -570,7 +636,7 @@ function renderRepulsion(d) {
   $("rp-topic").textContent = "#" + d.topic;
   $("rp-cur").textContent = d.curiosity.toFixed(3);
   $("rp-auth-v").textContent = d.authenticity.toFixed(3);
-  setBadge($("rp-mood"), d.mood, MOOD_CLASS[d.mood]);
+  setBadge($("rp-mood"), ko(d.mood), MOOD_CLASS[d.mood]);
   const status = $("rp-status");
   status.className = "status";
   status.textContent = MOOD_TEXT[d.mood];
@@ -586,10 +652,41 @@ function renderPipeline(d) {
   $("pl-hl").textContent = d.h_left.toFixed(2);
   $("pl-hr").textContent = d.h_right.toFixed(2);
   $("pl-mi").textContent = d.mi.toFixed(3);
-  setBadge($("pl-badge"), d.verdict, EMERGENCE_CLASS[d.verdict]);
+  setBadge($("pl-badge"), ko(d.verdict), EMERGENCE_CLASS[d.verdict]);
   const status = $("pl-status");
   status.className = "status";
   status.textContent = EMERGENCE_TEXT[d.verdict];
+}
+
+function renderBase(d) {
+  drawPhasePlane($("bs-phase"), d.a, d.g);
+  drawTrace($("bs-mag"), d.magnetization, "#7b9aff", 1.0, 300);
+  drawTrace($("bs-l"), d.left, "#7b9aff", d.range, 200);
+  drawTrace($("bs-r"), d.right, "#a8e668", d.range, 200);
+
+  // Rotation only ever climbs, so plot it against its own recent span — a flat
+  // line is the clock having stopped being paid for.
+  ROTATION.push(d.phase);
+  if (ROTATION.length > 200) ROTATION.shift();
+  const lo = ROTATION[0], hi = ROTATION[ROTATION.length - 1];
+  const span = Math.max(1e-6, hi - lo);
+  drawTrace($("bs-rot"), ROTATION.map(v => ((v - lo) / span) * 2 - 1), "#a8e668", 1.0, 200);
+
+  $("bs-phase-v").textContent = d.phase.toFixed(2);
+  $("bs-tension").textContent = d.tension.toFixed(3);
+  $("bs-mi").textContent = d.mi.toFixed(3);
+  setBadge($("bs-rhythm"), ko(d.rhythm), CRYSTAL_CLASS[d.rhythm]);
+  setBadge($("bs-badge"), ko(d.verdict), EMERGENCE_CLASS[d.verdict]);
+
+  const status = $("bs-status");
+  status.className = "status";
+  if (d.rhythm === "locked" && d.verdict === "emergent") {
+    status.textContent = "잠금이 회전 비용을 대고 있고, 움직이는 간극이 두 스트림을 묶고 있습니다.";
+  } else if (d.rhythm !== "locked" && d.mi < 0.05) {
+    status.textContent = `시계가 멈췄습니다. 간극은 여전히 ${d.tension.toFixed(3)} — 두 엔진은 벌어진 채입니다 — 그런데 그 안에서 아무 말도 오가지 않습니다.`;
+  } else {
+    status.textContent = "전이 중 — 판정과 관측 창 모두 변화보다 수백 틱 늦게 따라옵니다.";
+  }
 }
 
 // ── wiring ─────────────────────────────────────────────────────────────────
@@ -613,6 +710,8 @@ const SLIDERS = [
   ["rp-sep", "rp-sep-v", "repulsion"],
   ["rp-noise", "rp-noise-v", "repulsion"],
   ["pl-sep", "pl-sep-v", "pipeline"],
+  ["bs-eps", "bs-eps-v", "base"],
+  ["bs-sep", "bs-sep-v", "base"],
 ];
 for (const [input, output, engine] of SLIDERS) {
   const el = $(input), out = $(output);
