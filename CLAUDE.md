@@ -5,7 +5,8 @@ ported to Python, what they compose into once they share a clock (`base.py`), an
 IIT 4.0 engine to measure the result with (`iit4/`, bit-exact against its hexa origin).
 
 Layout: `info` · `emergence` · `crystal` · `repulsion` · `pipeline` · `base` · `iit4/` ·
-`substrate` · `viewer/`. Every folder carries its own `CLAUDE.md`, and the local one wins.
+`substrate` · `words` · `viewer/`, with work outputs in `state/`. Every folder carries its
+own `CLAUDE.md`, and the local one wins.
 
 ## doc-language
 - do: Write EVERY document in Korean — `README.md` and all other `.md` (owner instruction)
@@ -34,6 +35,10 @@ Layout: `info` · `emergence` · `crystal` · `repulsion` · `pipeline` · `base
 ## viewer-restart
 - do: Restart the viewer after ANY `.py` change — `page.html` is re-read per request but `server.py` is loaded once at start
 - dont: Assuming a browser refresh picks up Python edits — a fresh page calling a stale server presents as `스트림 끊김` (stream interrupted) in the UI
+
+## preserve-state
+- do: Every non-source output lands in git-tracked `state/` — delegated reports verbatim, re-measurements separately, each result with a runnable script and its conditions
+- dont: Leaving a measurement in `/tmp` · quoting a delegated number as verified without re-deriving it here
 
 ## engine-purity
 - do: Standard library only · zero runtime deps · every engine reproducible under `seed=` · all I/O confined to `viewer/`
