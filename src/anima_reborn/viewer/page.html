@@ -396,6 +396,7 @@
       <div class="metric"><div class="k">패턴</div><div class="v" id="cp-pattern-v">—</div></div>
       <div class="metric"><div class="k">국면</div><div class="v"><span class="badge" id="cp-phase-b">—</span></div></div>
       <div class="metric"><div class="k">결합 λ</div><div class="v" id="cp-coupling">—</div></div>
+      <div class="metric"><div class="k">입력</div><div class="v" id="cp-drive-b">—</div></div>
       <div class="metric"><div class="k">틱</div><div class="v" id="cp-ticks">—</div></div>
     </div>
     <div class="status" id="cp-status"></div>
@@ -895,6 +896,10 @@ function renderCoupled(d) {
   $("cp-pattern-v").textContent = d.pattern.toString(2).padStart(4, "0");
   setBadge($("cp-phase-b"), d.listening ? "듣는 중" : "통합 중", d.listening ? "" : "good");
   $("cp-coupling").textContent = d.coupling.toFixed(2);
+  // 입력은 스칼라(모든 유닛에 같은 말) 또는 유닛별 벡터로 올 수 있다.
+  $("cp-drive-b").textContent = Array.isArray(d.drive)
+    ? d.drive.map(v => v.toFixed(2)).join(" ")
+    : d.drive.toFixed(2);
   $("cp-ticks").textContent = d.ticks;
   const status = $("cp-status");
   status.className = "status";

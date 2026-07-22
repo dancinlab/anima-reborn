@@ -43,7 +43,15 @@ measurement rather than ambition: dynamics alone cannot canonicalize, because th
 that two signals are one concept must be IN the signals and co-occurrence is what puts it
 there. Its falsifier (`shuffled=True`) is public API for the same reason the wirings are.
 Two rules it must keep — score only on held-out concepts, and report the gain over the
-learner's OWN untrained baseline, which is not zero.
+learner's OWN untrained baseline, which is not zero. `observe(..., sample=n)` draws a
+fresh noise realization of the same concept; a consumer that repeats a noisy process on
+one fixed observation is measuring that process's noise and scoring an exemplar.
+
+The two are connected: `CoupledEngine(drive=...)` takes a per-unit vector, so an aligned
+representation arrives as itself rather than as its average, and
+`state/communication/aligned_drive.py` measures whether concept identity survives the
+engine (81% does). Measure the drive BEFORE the engine every time — the engine can only
+lose information, so a trajectory score alone cannot be attributed to it.
 
 `base.py` is the one module here that is **not** a port: it composes the four under a
 single mortal clock. Its thesis, its measured constant `EPSILON`, and the line between

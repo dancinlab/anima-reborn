@@ -72,6 +72,7 @@ __all__ = [
     "coupled_matrix",
     "coupled_phi",
     "representation",
+    "signature",
     "recurrence_evidence",
     "binarize",
     "crystal_matrix",
@@ -468,18 +469,25 @@ class Representation:
         )
 
 
-def _signature(
-    drive: float,
+def signature(
+    drive: float | Sequence[float],
     *,
-    wiring: Wiring,
-    rhythm: Rhythm,
-    seed: int,
-    ticks: int,
-    tail: int,
-    gain: float,
-    amplitude: float,
+    wiring: Wiring = Wiring.RING,
+    rhythm: Rhythm = FIXED,
+    seed: int = 0,
+    ticks: int = REPRESENTATION_TICKS,
+    tail: int = REPRESENTATION_TAIL,
+    gain: float = GAIN,
+    amplitude: float = AMPLITUDE,
 ) -> list[float]:
-    """Mean and variability per unit over the trajectory's tail."""
+    """What an engine told `drive` does, as `UNITS` means then `UNITS` spreads.
+
+    The tail of the trajectory rather than its endpoint, and its variability
+    alongside its position — an engine running a rhythm never stops moving, and
+    where it is throws away what its motion keeps. Public because a caller
+    asking "does what I told it survive" needs the same summary `representation`
+    scores, and a second copy of it would drift.
+    """
     engine = CoupledEngine(
         wiring=wiring,
         rhythm=rhythm,
@@ -505,7 +513,7 @@ def _spread(points: Sequence[Sequence[float]]) -> float:
 
 
 def representation(
-    drives: Sequence[float],
+    drives: Sequence[float | Sequence[float]],
     *,
     wiring: Wiring = Wiring.RING,
     rhythm: Rhythm = FIXED,
@@ -538,8 +546,8 @@ def representation(
     if tail < 2 or tail > ticks:
         raise ValueError(f"tail must be in [2, {ticks}], got {tail}")
 
-    def signature(drive: float, walk: int) -> list[float]:
-        return _signature(
+    def measure(drive: float | Sequence[float], walk: int) -> list[float]:
+        return signature(
             drive,
             wiring=wiring,
             rhythm=rhythm,
@@ -551,8 +559,8 @@ def representation(
         )
 
     return Representation(
-        by_drive=_spread([signature(d, seed) for d in drives]),
-        by_noise=_spread([signature(drives[0], w) for w in range(noise_seeds)]),
+        by_drive=_spread([measure(d, seed) for d in drives]),
+        by_noise=_spread([measure(drives[0], w) for w in range(noise_seeds)]),
         drives=len(drives),
         ticks=ticks,
     )

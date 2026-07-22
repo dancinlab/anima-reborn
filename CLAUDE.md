@@ -52,6 +52,10 @@ own `CLAUDE.md`, and the local one wins.
 - do: A new engine parameter defaults to leaving the engine BIT-identical, pinned by a test — published Phi was measured on the old behaviour
 - dont: A default that shifts a trajectory "negligibly" · silently re-baselining every measured number in the docs
 
+## channel-before-carrier
+- do: Score what ENTERS a stage before scoring what leaves it, and report the surviving fraction — a lossy stage cannot create what was not fed to it
+- dont: Quoting a downstream score as the stage's doing · omitting the deaf/unreachable arm that proves the stage was even in the path
+
 ## engine-purity
 - do: Standard library only · zero runtime deps · every engine reproducible under `seed=` · all I/O confined to `viewer/`
 - dont: I/O, a clock, or a thread inside an engine

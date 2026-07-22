@@ -234,6 +234,49 @@ class TestTheEngineCarriesIt:
         assert engine.run(200).coupling in (0.0, HIGH)
 
 
+class TestAVectorDrive:
+    """A scalar says the same thing to every unit, which is all a single number
+    can say. A representation is not a single number, so it arrives as its
+    average unless the engine can be told one value per unit."""
+
+    def test_a_scalar_is_the_same_thing_said_to_every_unit(self) -> None:
+        """Bit-identical, so nothing measured before vectors existed moved."""
+        scalar = CoupledEngine(rhythm=ALTERNATING, drive=0.3, seed=2).run(200)
+        spelled = CoupledEngine(
+            rhythm=ALTERNATING, drive=(0.3, 0.3, 0.3, 0.3), seed=2
+        ).run(200)
+        assert scalar.values == spelled.values
+
+    def test_it_says_something_a_scalar_cannot(self) -> None:
+        """Same mean, different message — so the vector is not arriving as its
+        average, which is the whole reason for it."""
+        vector = CoupledEngine(
+            rhythm=ALTERNATING, drive=(0.8, -0.8, 0.4, -0.4), seed=3
+        ).run(200)
+        averaged = CoupledEngine(rhythm=ALTERNATING, drive=0.0, seed=3).run(200)
+        assert vector.values != averaged.values
+
+    def test_the_engine_still_cannot_hear_it_at_full_coupling(self) -> None:
+        deaf = CoupledEngine(drive=(0.8, -0.8, 0.4, -0.4), seed=4).run(200)
+        silent = CoupledEngine(drive=0.0, seed=4).run(200)
+        assert deaf.values == silent.values
+
+    def test_it_is_validated_on_every_assignment(self) -> None:
+        engine = CoupledEngine(seed=1)
+        with pytest.raises(ValueError, match="drive must be one value or 4"):
+            engine.drive = (0.1, 0.2)
+        with pytest.raises(ValueError, match="drive must be in"):
+            engine.drive = (0.1, 0.2, 0.3, 1.5)
+        with pytest.raises(ValueError, match="drive must be in"):
+            CoupledEngine(drive=2.0)
+
+    def test_it_reads_back_in_the_shape_it_was_given(self) -> None:
+        engine = CoupledEngine(seed=1, drive=(0.1, 0.2, 0.3, 0.4))
+        assert engine.drive == (0.1, 0.2, 0.3, 0.4)
+        engine.drive = 0.5
+        assert engine.drive == 0.5
+
+
 class TestRepresentationIsValidated:
     def test_it_needs_something_to_compare(self) -> None:
         with pytest.raises(ValueError, match="drives must have at least 2"):

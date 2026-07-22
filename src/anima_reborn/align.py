@@ -208,11 +208,27 @@ class Aligner:
             ],
         )
 
-    def observe(self, concept: int, *, modality: int) -> list[float]:
-        """One noisy observation of a concept through one modality."""
+    def observe(self, concept: int, *, modality: int, sample: int = 0) -> list[float]:
+        """One noisy observation of a concept through one modality.
+
+        Deterministic in `(concept, modality, sample)`, so an observation can be
+        re-derived rather than stored. `sample` draws a DIFFERENT noise
+        realization of the same concept through the same modality; `sample=0` is
+        the only one that existed before and is unchanged bit for bit.
+
+        Repeats matter downstream. A consumer that re-runs a noisy process on
+        one fixed observation is measuring that process's noise, not invariance
+        to observation noise, and would be scoring an exemplar rather than a
+        concept.
+        """
         latent = _concept_vector(concept, self.dim)
         mixing = self._world[modality]
-        rng = random.Random((concept * 2 + modality) ^ (self._seed or 0))
+        key = concept * 2 + modality
+        if sample:
+            # Spelled out rather than hashed, so the stream does not depend on
+            # anything about the interpreter's hashing.
+            key = (key * 1_000_003 + sample) & 0x7FFFFFFF
+        rng = random.Random(key ^ (self._seed or 0))
         return [
             sum(mixing[i][j] * latent[j] for j in range(self.dim))
             + rng.gauss(0, self.noise)

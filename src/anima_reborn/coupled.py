@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 
@@ -198,6 +199,22 @@ class Rhythm:
         return MACRO_STEP if self.period is None else self.period * 2
 
 
+def _as_drive(value: float | Sequence[float]) -> tuple[float, ...]:
+    """One value said to every unit, or one value per unit."""
+    if isinstance(value, Sequence):
+        values = tuple(float(v) for v in value)
+        if len(values) != UNITS:
+            raise ValueError(
+                f"drive must be one value or {UNITS}, got {len(values)}"
+            )
+    else:
+        values = (float(value),) * UNITS
+    for v in values:
+        if not -1.0 <= v <= 1.0:
+            raise ValueError(f"drive must be in [-1, 1], got {v}")
+    return values
+
+
 FIXED = Rhythm()
 """The default — coupling 1.0, never released."""
 
@@ -252,10 +269,13 @@ class CoupledEngine:
         rhythm: When the units read each other. The default never lets go, which
             is the fixed coupling the wall is made of; `ALTERNATING` releases it
             half the time.
-        drive: What the engine is told, in [-1, 1], scaled by `amplitude`. Only
-            reachable while the coupling is below 1.0 — at full coupling a unit's
-            target is entirely its partner and nothing outside can be heard,
-            which is the wall stated as an equation.
+        drive: What the engine is told, scaled by `amplitude`. One value in
+            [-1, 1] says the same thing to every unit; a sequence of `UNITS`
+            values says something different to each, which is what a vector
+            representation needs in order to arrive as more than its average.
+            Only reachable while the coupling is below 1.0 — at full coupling a
+            unit's target is entirely its partner and nothing outside can be
+            heard, which is the wall stated as an equation.
         gain: Steepness of each unit's response to what it reads.
         amplitude: Target amplitude a saturated response reaches.
         seed: Fixes the initial positions and the walk.
@@ -268,7 +288,7 @@ class CoupledEngine:
         *,
         wiring: Wiring = Wiring.RING,
         rhythm: Rhythm = FIXED,
-        drive: float = 0.0,
+        drive: float | Sequence[float] = 0.0,
         gain: float = GAIN,
         amplitude: float = AMPLITUDE,
         seed: int | None = None,
@@ -278,8 +298,6 @@ class CoupledEngine:
             raise ValueError(f"gain must be > 0, got {gain}")
         if amplitude <= 0.0:
             raise ValueError(f"amplitude must be > 0, got {amplitude}")
-        if not -1.0 <= drive <= 1.0:
-            raise ValueError(f"drive must be in [-1, 1], got {drive}")
         self.wiring = wiring
         self.rhythm = rhythm
         self.drive = drive
@@ -296,6 +314,16 @@ class CoupledEngine:
             self._values = [float(v) for v in initial]
         self._tick = 0
         self._coupling = self.rhythm.at(0)
+
+    @property
+    def drive(self) -> float | tuple[float, ...]:
+        """What the engine is being told, in the shape it was given."""
+        return self._given
+
+    @drive.setter
+    def drive(self, value: float | Sequence[float]) -> None:
+        self._given = value
+        self._drive = _as_drive(value)
 
     def _random_start(self) -> list[float]:
         return [(self._rng.random() - 0.5) * self.amplitude for _ in range(UNITS)]
@@ -328,7 +356,10 @@ class CoupledEngine:
         previous = list(self._values)
         sources = self.wiring.sources
         coupling = self._coupling = self.rhythm.at(self._tick)
-        heard = self.drive * self.amplitude
+        # Scaled here rather than inside the target, so the multiply order is
+        # the one every published number was measured under — `(1-c) * (d * a)`
+        # and `((1-c) * d) * a` are not the same float.
+        heard = [value * self.amplitude for value in self._drive]
         for i, source in enumerate(sources):
             partner = (
                 -self.amplitude
@@ -341,7 +372,7 @@ class CoupledEngine:
             target = (
                 partner
                 if coupling == 1.0
-                else (1.0 - coupling) * heard + coupling * partner
+                else (1.0 - coupling) * heard[i] + coupling * partner
             )
             self._values[i] = (
                 previous[i]

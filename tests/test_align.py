@@ -13,6 +13,7 @@ the training pairs, and an untrained baseline that is not zero.
 
 from __future__ import annotations
 
+import math
 import statistics
 
 import pytest
@@ -116,6 +117,41 @@ class TestConditions:
         early = aligner.run(200).learned
         late = aligner.run(3000).learned
         assert late > early
+
+
+class TestObservationsCanBeRepeated:
+    """A consumer that re-runs a noisy process on ONE fixed observation is
+    measuring that process's noise, not invariance to observation noise — it
+    would be scoring an exemplar and calling it a concept."""
+
+    def test_sample_zero_is_what_there_always_was(self) -> None:
+        aligner = Aligner(seed=1)
+        assert aligner.observe(3, modality=0) == aligner.observe(
+            3, modality=0, sample=0
+        )
+
+    def test_another_sample_is_another_draw_of_the_same_concept(self) -> None:
+        aligner = Aligner(seed=1, noise=0.3)
+        first = aligner.observe(3, modality=0, sample=1)
+        second = aligner.observe(3, modality=0, sample=2)
+        assert first != second
+        assert first != aligner.observe(3, modality=0)
+
+    def test_repeats_are_reproducible(self) -> None:
+        assert Aligner(seed=1).observe(3, modality=0, sample=7) == Aligner(
+            seed=1
+        ).observe(3, modality=0, sample=7)
+
+    def test_they_are_still_the_same_concept(self) -> None:
+        """Noisy draws of one concept must stay closer to each other than to
+        another concept's draws, or a repeat is not a repeat."""
+        aligner = Aligner(seed=1, dim=4)
+        same = [aligner.observe(3, modality=0, sample=s) for s in range(1, 9)]
+        other = aligner.observe(11, modality=0, sample=1)
+        within = statistics.mean(
+            math.dist(a, b) for a in same for b in same if a is not b
+        )
+        assert within < math.dist(same[0], other)
 
 
 class TestEngine:
