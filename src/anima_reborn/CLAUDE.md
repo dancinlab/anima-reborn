@@ -43,7 +43,12 @@ measurement rather than ambition: dynamics alone cannot canonicalize, because th
 that two signals are one concept must be IN the signals and co-occurrence is what puts it
 there. Its falsifier (`shuffled=True`) is public API for the same reason the wirings are.
 Two rules it must keep — score only on held-out concepts, and report the gain over the
-learner's OWN untrained baseline, which is not zero. `observe(..., sample=n)` draws a
+learner's OWN untrained baseline, which is not zero. A third arrived with `contrast`:
+report how many effective dimensions the learned space uses, because pulling toward a
+midpoint narrows it (1.21 of four, below the raw signals' 1.93) and a narrow space scores
+well while carrying little. The push that fixes it must be by the unit direction and must
+stop at a distance; by the raw displacement it runs away to rank 1.00, which is worse
+than the contraction. `observe(..., sample=n)` draws a
 fresh noise realization of the same concept; a consumer that repeats a noisy process on
 one fixed observation is measuring that process's noise and scoring an exemplar.
 

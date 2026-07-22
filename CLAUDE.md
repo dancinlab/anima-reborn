@@ -56,6 +56,10 @@ own `CLAUDE.md`, and the local one wins.
 - do: Score what ENTERS a stage before scoring what leaves it, and report the surviving fraction — a lossy stage cannot create what was not fed to it
 - dont: Quoting a downstream score as the stage's doing · omitting the deaf/unreachable arm that proves the stage was even in the path
 
+## report-the-rank
+- do: Report how many effective dimensions a learned or measured space uses, beside every accuracy — a space collapsed to a line scores well and carries nothing
+- dont: An identification number with no width beside it · a repulsion term scaled by displacement rather than direction (it runs away to rank 1.0)
+
 ## engine-purity
 - do: Standard library only · zero runtime deps · every engine reproducible under `seed=` · all I/O confined to `viewer/`
 - dont: I/O, a clock, or a thread inside an engine

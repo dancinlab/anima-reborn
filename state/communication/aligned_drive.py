@@ -90,6 +90,14 @@ PAIRS = 4000
 SEEDS = 12
 PERMUTATIONS = 200
 
+CONTRAST = 0.3
+MARGIN = 1.0
+"""The bounded push, as a second trained arm. Not a tuned point: accuracy reads
+0.535-0.583 across contrast 0.1-0.6 and margin 0.5-2.0, against 0.418 without
+it, so the plateau is the evidence rather than the peak. The push MUST be
+bounded — an unbounded one has no scale to stop at, grows one direction, and
+drives the effective rank to exactly 1.00."""
+
 
 def views(aligner: Aligner, modality: int, samples: range) -> dict[int, list[list[float]]]:
     """Where each held-out concept lands, once per fresh observation."""
@@ -269,8 +277,12 @@ def main() -> None:
         shuffled = fresh(shuffled=True)
         shuffled.run(PAIRS)
 
+        contrastive = fresh(contrast=CONTRAST, margin=MARGIN)
+        contrastive.run(PAIRS)
+
         readings = {
             "trained": score(trained),
+            "contrastive": score(contrastive),
             "untrained": score(fresh()),
             "shuffled": score(shuffled),
             "raw": score(trained, raw=True),
@@ -282,17 +294,16 @@ def main() -> None:
 
     print(f"{'arm':<12}{'accuracy':>12}{'worst seed':>13}{'eff. rank':>12}")
     print("-" * 49)
-    for name in ("trained", "raw", "untrained", "shuffled"):
+    for name in ("trained", "contrastive", "raw", "untrained", "shuffled"):
         print(
             f"{name:<12}{statistics.mean(arms[name]):>12.3f}"
             f"{min(arms[name]):>13.3f}{statistics.mean(ranks[name]):>12.2f}"
         )
     every = [f for values in floors.values() for f in values]
     print(f"{'permuted':<12}{statistics.mean(every):>12.3f}{max(every):>13.3f}")
-    clears = sum(
-        arms["trained"][i] > floors["trained"][i] for i in range(SEEDS)
-    )
-    print(f"\n  trained clears its OWN permutation ceiling on {clears}/{SEEDS} seeds")
+    for name in ("trained", "contrastive"):
+        clears = sum(arms[name][i] > floors[name][i] for i in range(SEEDS))
+        print(f"  {name} clears its OWN permutation ceiling on {clears}/{SEEDS} seeds")
 
     print("\nper-seed margin over the strongest control (all 12 must be positive)")
     margins = [
@@ -328,9 +339,14 @@ def main() -> None:
         shuffled = Aligner(dim=DIM, concepts=CONCEPTS, seed=seed, shuffled=True)
         shuffled.run(PAIRS)
         untrained = Aligner(dim=DIM, concepts=CONCEPTS, seed=seed)
+        contrastive = Aligner(
+            dim=DIM, concepts=CONCEPTS, seed=seed, contrast=CONTRAST, margin=MARGIN
+        )
+        contrastive.run(PAIRS)
 
         for name, aligner, rhythm, raw in (
             ("trained", trained, ALTERNATING, False),
+            ("contrastive", contrastive, ALTERNATING, False),
             ("raw", trained, ALTERNATING, True),
             ("untrained", untrained, ALTERNATING, False),
             ("shuffled", shuffled, ALTERNATING, False),
@@ -344,7 +360,7 @@ def main() -> None:
     ceiling = max(every_floor)
     print(f"{'arm':<14}{'trajectory':>12}{'worst':>9}{'drive':>9}{'survived':>11}")
     print("-" * 55)
-    for name in ("trained", "raw", "untrained", "shuffled", "deaf (FIXED)"):
+    for name in ("trained", "contrastive", "raw", "untrained", "shuffled", "deaf (FIXED)"):
         through = statistics.mean(engine[name])
         before = statistics.mean(arms.get(name.split()[0], arms["trained"]))
         # A ratio between two numbers that are both at the floor is noise
@@ -357,21 +373,22 @@ def main() -> None:
     print(
         f"{'permuted':<14}{statistics.mean(every_floor):>12.3f}{ceiling:>9.3f}"
     )
-    clears = sum(
-        engine["trained"][i] > engine_floors["trained"][i] for i in range(SEEDS)
-    )
+    for name in ("trained", "contrastive"):
+        clears = sum(
+            engine[name][i] > engine_floors[name][i] for i in range(SEEDS)
+        )
+        print(f"  {name} clears its OWN permutation ceiling on {clears}/{SEEDS} seeds")
     print(
-        f"\n  trained clears its OWN permutation ceiling on {clears}/{SEEDS} seeds"
-        "\n  (each seed against its own 200 re-labellings, not the worst of all"
+        "  (each seed against its own 200 re-labellings, not the worst of all"
         "\n   seeds' — a max of maxes is a bar nothing should have to clear)"
     )
 
     survived = [
-        engine["trained"][i]
+        engine["contrastive"][i]
         - max(engine["raw"][i], engine["untrained"][i], engine["shuffled"][i])
         for i in range(SEEDS)
     ]
-    print("\nper-seed margin through the engine (all 12 must be positive)")
+    print("\nper-seed margin of the contrastive arm through the engine")
     print("  " + " ".join(f"{m:+.3f}" for m in survived))
     print(f"  {sum(m > 0 for m in survived)}/{SEEDS} positive")
     print(

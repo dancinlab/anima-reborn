@@ -154,6 +154,97 @@ class TestObservationsCanBeRepeated:
         assert within < math.dist(same[0], other)
 
 
+class TestTheOtherHalfOfCoOccurrence:
+    """The midpoint rule only pulls, so nothing opposes contraction and the
+    shared space shrinks toward a line. Co-occurrence says what does NOT come
+    together as well, and that half was missing."""
+
+    def test_it_is_off_by_default_and_changes_nothing(self) -> None:
+        """Every published number was measured without it."""
+        assert Aligner(seed=5).contrast == 0.0
+        plain = Aligner(seed=5).run(1500)
+        spelled = Aligner(seed=5, contrast=0.0).run(1500)
+        assert plain == spelled
+
+    def test_an_unscaled_push_collapses_what_it_was_meant_to_widen(self) -> None:
+        """The first attempt, pinned so it cannot come back as a simplification.
+
+        Pushing by the raw displacement makes the step grow with the distance
+        already achieved, so one direction runs away and the effective rank goes
+        to 1.0 — full collapse, worse than the contraction being fixed. The
+        shipped rule pushes by the unit direction instead.
+        """
+        assert _rank(1, contrast=0.3, margin=1e9, cls=_Unscaled) < 1.05
+
+    def test_the_direction_and_the_stopping_distance_do_different_jobs(
+        self,
+    ) -> None:
+        """Both are load-bearing, and neither is the other's spare. Measured
+        over six seeds at `dim=4`: rank 1.21 with no push, 1.00 unscaled, 1.12
+        scaled with nothing to stop it, 1.48 scaled and stopped."""
+        endless = statistics.mean(
+            _rank(s, contrast=0.3, margin=1e9) for s in range(4)
+        )
+        stopped = statistics.mean(
+            _rank(s, contrast=0.3, margin=1.0) for s in range(4)
+        )
+        assert endless > 1.05, endless
+        assert stopped > endless, (endless, stopped)
+
+    def test_it_widens_the_space_that_was_narrowing(self) -> None:
+        without = statistics.mean(_rank(s) for s in range(4))
+        with_push = statistics.mean(
+            _rank(s, contrast=0.3, margin=1.0) for s in range(4)
+        )
+        assert with_push > without, (without, with_push)
+
+    def test_it_does_not_rescue_the_control(self) -> None:
+        """A change that improved the shuffled arm too would be improving the
+        signals rather than teaching from the pairing."""
+        values = learned(shuffled=True, seeds=4, contrast=0.3, margin=1.0)
+        assert statistics.mean(values) < 0.2, values
+
+    def test_configuration_is_validated(self) -> None:
+        with pytest.raises(ValueError, match="contrast must be >= 0"):
+            Aligner(contrast=-0.1)
+        with pytest.raises(ValueError, match="margin must be > 0"):
+            Aligner(margin=0.0)
+
+
+class _Unscaled(Aligner):
+    """The rejected push: by the raw displacement rather than its direction."""
+
+    def _push_apart(self, concept: int, here: list[float]) -> None:
+        other = self._rng.randrange(self.concepts)
+        if other == concept:
+            return
+        view = self.observe(other, modality=1)
+        there = self.project(view, modality=1)
+        for i in range(self.dim):
+            away = there[i] - here[i]
+            for j in range(self.dim):
+                self._right[i][j] += self.rate * self.contrast * away * view[j]
+
+
+def _rank(seed: int, *, cls: type[Aligner] = Aligner, **kwargs) -> float:
+    """Effective dimensions the trained projections of held-out concepts use."""
+    aligner = cls(dim=4, concepts=40, seed=seed, **kwargs)
+    aligner.run(3000)
+    points = [
+        aligner.project(aligner.observe(c, modality=0), modality=0)
+        for c in range(10_000, 10_020)
+    ]
+    middle = [statistics.mean(p[i] for p in points) for i in range(4)]
+    centred = [[p[i] - middle[i] for i in range(4)] for p in points]
+    cov = [
+        [statistics.mean(r[i] * r[j] for r in centred) for j in range(4)]
+        for i in range(4)
+    ]
+    trace = sum(cov[i][i] for i in range(4))
+    square = sum(cov[i][j] * cov[i][j] for i in range(4) for j in range(4))
+    return trace * trace / max(square, 1e-18)
+
+
 class TestEngine:
     def test_a_seed_makes_a_run_reproducible(self) -> None:
         assert Aligner(seed=7).run(500) == Aligner(seed=7).run(500)

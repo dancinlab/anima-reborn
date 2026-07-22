@@ -20,9 +20,24 @@ co-occurrence means changing with experience. Hence this.
 
 **The mechanism.** Two modalities, each with its own projection. A pair arrives
 together, and each projection is nudged toward the midpoint of where the two
-currently land. Nothing else. There is no global objective — in particular
-nothing maximizes Phi or mutual information, which this repo refused for the
-good reason that an optimizer harvests the estimator's artefact.
+currently land. Optionally (`contrast`), a non-partner is pushed away from that
+same place by the unit direction, stopping once it is `margin` away. Nothing
+else. There is no global objective — in particular nothing maximizes Phi or
+mutual information, which this repo refused for the good reason that an
+optimizer harvests the estimator's artefact.
+
+**Why the push exists, and why it is off by default.** Pulling is all the
+midpoint rule does, so nothing opposes contraction and the shared space narrows
+toward a line: 1.21 of four effective dimensions, LOWER than the raw
+observations' 1.93. Adding the other half of what co-occurrence says lifts that
+to 1.48 and identification from 0.418 to 0.583. It is off by default because
+every number published before it was measured without it.
+
+The obvious version of it was worse than the problem. Pushing by the raw
+displacement makes the step grow with the distance already gained, one direction
+runs away, and the rank falls to exactly 1.00 — the collapse that scores well and
+carries nothing, which is what killed the attractor route. `tests/test_align.py`
+keeps that version around as a subclass so the artefact stays pinned.
 
 **What makes it more than memorizing.** It is scored on concepts it never
 trained on. Ten training concepts are enough to align concepts it has never
@@ -74,6 +89,35 @@ with it: +0.948 / +0.716 / +0.421 / +0.103 at 0.1 / 0.3 / 0.6 / 1.0."""
 
 RATE = 0.01
 """Learning rate of the nudge toward the midpoint."""
+
+CONTRAST = 0.0
+"""How hard a NON-partner is pushed apart, relative to `rate`. Zero by default,
+which leaves the learner bit-identical to the one every published number was
+measured on.
+
+Why it exists. The midpoint rule only ever pulls, so nothing opposes contraction
+and the shared space shrinks: measured over 12 seeds at `dim=4`, the trained
+projections occupy 1.35 effective dimensions against the raw observations' 1.93.
+That is not the rank-1 collapse that killed the attractor route, but it is close
+to a line, and it means most of what a vector-drive engine could be told goes
+unused. Co-occurrence teaches what goes together AND what does not; only the
+first half was implemented.
+
+With it on at 0.3 and `MARGIN` 1.0, cross-modal identification of held-out
+concepts goes from 0.418 to 0.583 and the rank from 1.21 to 1.48, while the
+shuffled control stays at the floor — so the push is teaching from the pairing
+rather than improving the signals. Not a tuned point: the reading holds at
+0.535-0.583 across contrast 0.1-0.6 and margin 0.5-2.0, and the plateau is the
+evidence rather than the peak."""
+
+MARGIN = 1.0
+"""How far a non-partner has to be before the push stops.
+
+The stopping distance is what actually widens the space, and it is a separate
+job from pushing by the unit direction. Measured over six seeds at `dim=4`, in
+effective dimensions of four: 1.21 with no push at all, 1.00 pushing by the raw
+displacement, 1.12 pushing by the direction with nothing to stop it, and 1.48
+pushing by the direction and stopping. Neither half is the other's spare."""
 
 INITIAL_SCALE = 0.3
 """Projections start random, and must. Starting at zero makes both projections
@@ -145,6 +189,11 @@ class Aligner:
         concepts: Size of the training pool.
         noise: Observation noise per component.
         rate: How far each projection moves toward the midpoint per pair.
+        contrast: How hard a non-partner is pushed apart, relative to `rate`.
+            Zero leaves the learner exactly as it was. Above zero it opposes the
+            contraction the midpoint rule cannot see — still a local rule over
+            what did and did not co-occur, not a global objective, because an
+            optimizer would harvest the estimator's artefact.
         shuffled: **The falsifier.** Pair each modality-A observation with a
             different concept's modality-B observation — same signals, same
             statistics, co-occurrence destroyed. Public API rather than a test
@@ -160,6 +209,8 @@ class Aligner:
         concepts: int = CONCEPTS,
         noise: float = NOISE,
         rate: float = RATE,
+        contrast: float = CONTRAST,
+        margin: float = MARGIN,
         shuffled: bool = False,
         seed: int | None = None,
     ) -> None:
@@ -171,11 +222,17 @@ class Aligner:
             raise ValueError(f"rate must be > 0, got {rate}")
         if noise < 0.0:
             raise ValueError(f"noise must be >= 0, got {noise}")
+        if contrast < 0.0:
+            raise ValueError(f"contrast must be >= 0, got {contrast}")
+        if margin <= 0.0:
+            raise ValueError(f"margin must be > 0, got {margin}")
 
         self.dim = dim
         self.concepts = concepts
         self.noise = noise
         self.rate = rate
+        self.contrast = contrast
+        self.margin = margin
         self.shuffled = shuffled
         self._seed = seed
         self._rng = random.Random(seed)
@@ -275,7 +332,31 @@ class Aligner:
                 self._left[i][j] += self.rate * left_error * left_view[j]
                 self._right[i][j] += self.rate * right_error * right_view[j]
 
+        if self.contrast:
+            self._push_apart(concept, here)
+
         self._pairs += 1
+
+    def _push_apart(self, concept: int, here: list[float]) -> None:
+        """The other half of what co-occurrence says: this did NOT come with it.
+
+        The same local rule with its sign reversed — move the non-partner's
+        projection away from where the partner landed instead of toward it.
+        Nothing global is computed, so this is still the pairing teaching the
+        projections rather than an objective being optimized.
+        """
+        other = self._rng.randrange(self.concepts)
+        if other == concept:
+            return  # not a non-partner
+        view = self.observe(other, modality=1)
+        there = self.project(view, modality=1)
+        gap = math.dist(there, here)
+        if gap >= self.margin:
+            return  # already far enough; an unbounded push has no scale to stop at
+        for i in range(self.dim):
+            away = (there[i] - here[i]) / max(gap, 1e-9)
+            for j in range(self.dim):
+                self._right[i][j] += self.rate * self.contrast * away * view[j]
 
     def run(self, pairs: int) -> AlignState:
         """Learn from `pairs` pairs, then measure once."""
