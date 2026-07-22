@@ -15,6 +15,7 @@ Rendering, timers and DOM wiring stay in the origin; only the maths lives here.
 | `pipeline.py` | repulsion → sampled streams → emergence | pipeline tab |
 | `base.py` | all four under the crystal's clock — rotation only while LOCKED | (new — not in the origin) |
 | `substrate.py` | drive an engine from every state → measured TPM → Phi | (new — not in the origin) |
+| `words.py` | words as a continuing drive, always paired with a null control | (new — not in the origin) |
 
 `pipeline.py` imports `PHASE_RATE` / `PULL` / `DAMPING` from `repulsion.py` — the two
 engines share one drift law, and it is defined once.

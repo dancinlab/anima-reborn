@@ -33,6 +33,8 @@ Two more pieces sit alongside them:
                   `dancinlab/selfhost-work`, and bit-exact against it.
     substrate.py  the bridge: drive an engine from every state, measure its
                   transition matrix, and hand it to Phi.
+    words.py      words as a drive — with the null control that stops an
+                  estimator artefact reading as emergence.
 """
 
 from __future__ import annotations
@@ -49,6 +51,7 @@ from .substrate import (
     crystal_phi,
     estimate_matrix,
 )
+from .words import WordReading, blake_scalar, drive, measure
 
 __version__ = "0.1.0"
 
@@ -66,12 +69,16 @@ __all__ = [
     "RepulsionState",
     "SubstrateReading",
     "TimeCrystal",
+    "WordReading",
     "autocorrelation",
     "binarize",
+    "blake_scalar",
     "crystal_matrix",
     "crystal_phi",
+    "drive",
     "entropy",
     "estimate_matrix",
     "joint_entropy",
+    "measure",
     "mutual_information",
 ]
