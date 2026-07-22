@@ -522,3 +522,49 @@ class TestChainedPairsIntegrate:
         assert disjoint_high < disjoint_low * 0.6, (disjoint_low, disjoint_high)
         assert chained_high > chained_low * 0.8, (chained_low, chained_high)
         assert chained_high > disjoint_high * 3
+
+
+class TestIntegrationIsAFunctionNotACoincidence:
+    """The capstone's one sentence that coexistence cannot fake.
+
+    Three disjoint latches (`chain=0`) hold three bits and pass storage on their
+    own while measuring as reducible — so "concepts survive on the integrated
+    substrate" earns only coexistence. The one place integration is a FUNCTION
+    is the cross-pair probe: a probe differing only within pair 0 can move pairs
+    1-2 only through the chain, and with no chain that path is exactly zero.
+    Full composition in `state/communication/concepts.py`.
+    """
+
+    @staticmethod
+    def _cross_pair_response(chain: float, *, seed: int) -> float:
+        drive = tuple((((5 >> k) & 1) * 2 - 1) * 0.8 for k in range(6))
+        engine = CoupledEngine(
+            wiring=Wiring.PAIRS, units=6, chain=chain, rhythm=ALTERNATING,
+            drive=drive, seed=seed, initial=(0.0,) * 6,
+        )
+        engine.run(400)
+        engine.rhythm = FIXED
+        engine.drive = 0.0
+        held = engine.run(240).values
+
+        def move(start):
+            probe = CoupledEngine(
+                wiring=Wiring.PAIRS, units=6, chain=chain, rhythm=ALTERNATING,
+                drive=0.0, seed=seed, initial=tuple(start),
+            )
+            return sum(
+                sum((probe.step().values[i] - held[i]) ** 2 for i in range(2, 6))
+                for _ in range(20)
+            )
+
+        flipped = list(held)
+        flipped[0], flipped[1] = held[1], held[0]  # change pair 0 only
+        return abs(move(flipped) - move(list(held)))
+
+    def test_disjoint_pairs_cannot_respond_across_a_pair(self) -> None:
+        """Exactly zero — there is no causal path between the pairs."""
+        assert self._cross_pair_response(0.0, seed=1) == 0.0
+
+    def test_chained_pairs_do(self) -> None:
+        """The integrated whole moves where its parts cannot."""
+        assert self._cross_pair_response(0.2, seed=1) > 0.01
