@@ -55,8 +55,10 @@ one fixed observation is measuring that process's noise and scoring an exemplar.
 The two are connected: `CoupledEngine(drive=...)` takes a per-unit vector, so an aligned
 representation arrives as itself rather than as its average, and
 `state/communication/aligned_drive.py` measures whether concept identity survives the
-engine (81% does). Measure the drive BEFORE the engine every time — the engine can only
-lose information, so a trajectory score alone cannot be attributed to it.
+engine — 81% of it does with the midpoint rule alone, 86% with the push on. Measure the
+drive BEFORE the engine every time: the engine can only lose information, so a trajectory
+score alone cannot be attributed to it, and the deaf arm (coupling 1.0, drive
+bit-unreachable) is what proves the engine was in the path at all.
 
 `base.py` is the one module here that is **not** a port: it composes the four under a
 single mortal clock. Its thesis, its measured constant `EPSILON`, and the line between
