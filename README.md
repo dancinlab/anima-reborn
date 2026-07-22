@@ -6,7 +6,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-none-success">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-77%20passing-success">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-96%20passing-success">
   <img alt="Origin" src="https://img.shields.io/badge/origin-dancinlab%2Fanima--experience-blueviolet">
 </p>
 
@@ -16,8 +16,9 @@
 same four with the rendering taken away: the maths, headless, standard library only,
 seedable so a run can be reproduced and asserted on.
 
-Nothing here draws, threads, sleeps or reads a clock of its own. You step an engine and
-read what it says.
+No engine draws, threads, sleeps or reads a clock of its own. You step it and read what
+it says. All the I/O lives in one place — `viewer/`, which serves a browser page the
+engines know nothing about.
 
 ## Install
 
@@ -26,6 +27,29 @@ pip install -e ".[dev]"
 ```
 
 No runtime dependencies. Python 3.11 or newer.
+
+## Watch it run
+
+```bash
+python -m anima_reborn.viewer
+```
+
+```
+anima-reborn viewer
+  local    http://127.0.0.1:8420
+  network  http://192.168.1.20:8420
+  bound to every interface — anyone on this network can reach it
+  ctrl-c to stop
+```
+
+Four tabs, live sliders, and the same visuals as the origin — but every number and every
+plotted point comes from the Python engines over `/api/<engine>`. The page draws; it
+never simulates. That is what makes it evidence about the port rather than a second
+implementation.
+
+`--host 127.0.0.1` keeps it on this machine, `--port` moves it, `--seed` makes a
+demonstration repeat exactly. There is no authentication: it is a development viewer for
+a trusted network.
 
 ## The four engines
 
@@ -135,18 +159,20 @@ src/anima_reborn/
 ├─ emergence.py   coupled sine streams
 ├─ crystal.py     driven Ising ring
 ├─ repulsion.py   A × G latent field
-└─ pipeline.py    repulsion → streams → emergence
-tests/            77 tests, no network, no fixtures
+├─ pipeline.py    repulsion → streams → emergence
+└─ viewer/        the browser view — the only I/O in the package
+tests/            96 tests, no network, no fixtures
 ```
 
 Every engine is a class you step yourself, with `seed=` for reproducibility, `run(n)` to
 advance in bulk, and `reset()` to start over. State objects are frozen dataclasses, so a
 reading can be compared, stored and asserted on directly.
 
-## What was deliberately left out
+## What was deliberately left out of the engines
 
-Canvas drawing, DOM wiring, `setInterval` timers, the tab switcher and the Gradio
-wrapper. All of it belongs to the browser page, not to the engines.
+Canvas drawing, DOM wiring, timers, the tab switcher and the Gradio wrapper. None of it
+belongs to an engine. The drawing that survives lives in `viewer/page.html`, on the far
+side of an HTTP boundary, and it draws only what Python sends it.
 
 ## Differences from the origin
 

@@ -17,6 +17,9 @@ Rendering, timers and DOM wiring stay in the origin; only the maths lives here.
 `pipeline.py` imports `PHASE_RATE` / `PULL` / `DAMPING` from `repulsion.py` — the two
 engines share one drift law, and it is defined once.
 
+`viewer/` is the browser view of all four, and the one place in this package that does
+I/O. The rules below apply to the engine files here, not to it — see its own guide.
+
 ## Rules for changes here
 
 - **Standard library only.** No numpy, no torch. If a change seems to need one, it

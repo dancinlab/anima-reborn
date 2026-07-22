@@ -164,6 +164,7 @@ class RepulsionField:
         self._tension_history: deque[float] = deque(maxlen=AUTHENTICITY_WINDOW)
         self._previous_tension = 0.0
         self._tick = 0
+        self._state: RepulsionState | None = None
 
     def _random_vector(self) -> list[float]:
         return [(self._rng.random() - 0.5) * 0.4 for _ in range(self._dim)]
@@ -288,7 +289,7 @@ class RepulsionField:
 
         self._tick += 1
 
-        return RepulsionState(
+        self._state = RepulsionState(
             tension=tension,
             concept=concept,
             meaning=meaning,
@@ -299,6 +300,17 @@ class RepulsionField:
             context=context,
             sender=sender,
         )
+        return self._state
+
+    @property
+    def state(self) -> RepulsionState | None:
+        """The most recent reading, or None before the first tick.
+
+        Reading is free — unlike `step`, this does not advance the field. The
+        channels are derived per tick rather than from standing state, so there
+        is nothing to report until the field has moved at least once.
+        """
+        return self._state
 
     def run(self, ticks: int) -> RepulsionState:
         """Advance `ticks` times and return the final state."""
@@ -315,3 +327,4 @@ class RepulsionField:
         self._tension_history.clear()
         self._previous_tension = 0.0
         self._tick = 0
+        self._state = None
