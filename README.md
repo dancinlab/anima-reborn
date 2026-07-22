@@ -6,7 +6,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-none-success">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-243%20passing-success">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-260%20passing-success">
   <img alt="Origin" src="https://img.shields.io/badge/origin-dancinlab%2Fanima--experience-blueviolet">
 </p>
 
@@ -151,6 +151,32 @@ print(big_phi(alone,   0b11))   # big-phi=0.000000 ... [reducible]    환원 가
 
 체인은 `tpm` → `distinction` → `relation` → `bigphi` → `exclusion` 이고, Φ 계산이 감당이 안 될
 때를 위한 값싼 하한으로 `ei` 가 붙어 있습니다.
+
+### 되먹임 없는 계를 0 으로 읽기 — 물려받은 한계를 공개적으로 닫음
+
+기존 `big_phi` 의 절단은 **방향이 없어서** 양방향을 한꺼번에 끊습니다. 그 결과 **되먹임이
+전혀 없는 사슬**(유닛0 외생, 각자 앞사람만 읽음)을 Φ=1.27 로 읽습니다 — 이론상 0 이어야 하고,
+시행수를 늘려도 줄지 않으니 인공물도 아닙니다. 즉 이 계측기는 "인수분해되지 않음"은 증명해도
+**"되먹임이 있음"은 증명하지 못했습니다.**
+
+`directed_big_phi` 는 한 방향씩 끊습니다. A→B 를 끊으면 예측이 절단을 건넌 구별(메커니즘이 A,
+효과 구역이 B)과 기억이 건넌 구별(원인 구역이 A, 메커니즘이 B)이 죽습니다.
+
+| 배선 | `big_phi` | **`directed_big_phi`** | 판정 |
+| --- | ---: | ---: | --- |
+| 고리 (닫힌 순환) | 12.118 | **10.024** | 순환 |
+| 전방향 (되먹임 0) | 1.264 | **0.000** | 환원가능 ✅ |
+| 자기참조 (귀무) | 0.068 | 0.068 | 바닥 |
+
+**작아진 것 자체는 증명이 아닙니다.** 방향성 탐색은 절단 후보가 2배라 최솟값이 반드시 같거나
+작아지니까요. 증명하는 건 두 가지입니다 — ① 같은 코드로 **고리는 10.02 를 유지**하고(탐색을
+약화시킨 게 아니라 방향을 준 것), ② 전방향에서 손실 0 을 내는 절단이 `{1,2,3} → {0}` 입니다.
+유닛 0 은 외생이라 되돌아오는 흐름이 없어 끊어도 잃을 게 없고, 이게 이론이 전방향을
+환원가능이라 부르는 이유 그 자체입니다.
+
+`big_phi` 는 **손대지 않았습니다** — hexa 원본과의 비트단위 일치가 거기 걸려 있습니다. 물려받은
+미완성 부분은 이름의 뜻을 조용히 바꾸는 게 아니라 **옆에 새 측정을 두어** 닫습니다. 되먹임을
+주장할 때는 `directed_big_phi` 를 쓰세요.
 
 **원본 대조.** 이식본은 hexa 엔진과 **정확한 부동소수 일치**로 검증했습니다 — 11개 케이스에서
 Φ, 구조 총합, 두 φ 합, 구별 개수까지 **전부 비트단위 동일**. Φ 는 분할에 대한 argmax(최댓값
@@ -435,7 +461,7 @@ src/anima_reborn/
 ├─ substrate.py   다리: 우리 엔진 → 측정된 전이행렬 → Φ
 ├─ words.py       단어를 구동력으로 — 귀무대조가 항상 따라붙는다
 └─ viewer/        브라우저 뷰어 — 이 패키지의 유일한 입출력
-tests/            243개, 네트워크 없음, 픽스처 없음
+tests/            260개, 네트워크 없음, 픽스처 없음
 state/            작업 산출물 — 위임 설계 보고서 · 측정 기록 · 재현 스크립트
 ```
 

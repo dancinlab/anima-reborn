@@ -13,6 +13,7 @@ together?
 | `distinction.py` | M2 — small-phi, MICE, distinctions | `iit4_distinction.hexa` |
 | `relation.py` | M3 — congruent relations, Phi-structure | `iit4_relation.hexa` |
 | `bigphi.py` | M4 — system big-Phi over the minimum cut | `iit4_bigphi.hexa` |
+| `directed.py` | the same over DIRECTED cuts — tells a loop from a chain | (new — closes a carve-out) |
 | `exclusion.py` | M10 + M13 — maximal complex, spectrum | `iit4_complex.hexa` |
 | `ei.py` | effective information, a lower bound on Phi | `iit_ei.hexa` |
 
@@ -50,6 +51,12 @@ State these when reporting results; do not let a reader assume otherwise.
 - big-Phi is the Phi-structure destroyed by the system cut. IIT 4.0 proper
   rebuilds the cause-effect structure on the partitioned matrix with a
   normalization factor.
+- **CLOSED, loudly:** `big_phi`'s cut is undirected and so reads a strictly
+  feedforward chain at 1.27 bits where the theory says zero. `directed_big_phi`
+  cuts one direction at a time and reads it 0.000 exactly, while the ring stays
+  at 10.02 through the same code. `big_phi` is unchanged — the goldens depend on
+  it — so both numbers are available and the old name still means what it did.
+  Use `directed_big_phi` for any claim about recurrence.
 - Relations are second-order only — pairs, bound by `min(phi_d)`.
 - Nothing here is calibrated against PyPhi. On PyPhi's standard three-node
   network this engine reports 3.7548875003600997, which is this engine's number

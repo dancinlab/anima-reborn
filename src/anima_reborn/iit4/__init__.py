@@ -24,6 +24,8 @@ The chain, each layer built on the one below:
                    purview it speaks about most)
     relation.py    which distinctions bind, and the Phi-structure they assemble
     bigphi.py      what the least damaging cut still destroys — big-Phi
+    directed.py    the same, but cutting one direction at a time — which is
+                   what tells a loop apart from a chain
     exclusion.py   which subsystem is *the* entity, and whether a substrate
                    hosts several
     ei.py          effective information — a cheap lower bound for when the
@@ -58,6 +60,7 @@ a small-system instrument by construction, and no amount of tuning changes that.
 from __future__ import annotations
 
 from .bigphi import SystemPhi, big_phi, side_of
+from .directed import DirectedCut, DirectedPhi, directed_big_phi
 from .distinction import (
     Direction,
     Distinction,
@@ -94,6 +97,8 @@ from .tpm import (
 
 __all__ = [
     "Complex",
+    "DirectedCut",
+    "DirectedPhi",
     "Direction",
     "Distinction",
     "IntrinsicDifference",
@@ -108,6 +113,7 @@ __all__ = [
     "column_mean",
     "complex_spectrum",
     "congruent_overlap",
+    "directed_big_phi",
     "distinction",
     "distinctions",
     "effective_information",
