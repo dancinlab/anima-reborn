@@ -7,12 +7,23 @@ the engines.
 
 from __future__ import annotations
 
+import importlib
+import inspect
 import json
+import re
 import time
+from pathlib import Path
 
 import pytest
 
-from anima_reborn.viewer.server import MAX_STEPS_PER_REQUEST, Viewer, local_address
+import anima_reborn
+from anima_reborn.viewer.server import (
+    MAX_STEPS_PER_REQUEST,
+    PAGE,
+    TICK_RATES,
+    Viewer,
+    local_address,
+)
 
 
 def params(**kwargs: object) -> dict[str, list[str]]:
@@ -200,6 +211,96 @@ class TestTicker:
         viewer = Viewer(seed=23)
         for name, expected in rates.items():
             assert viewer.ticker(name).rate == expected
+
+
+class TestEngineViewerLockstep:
+    """Every engine must be visible in the viewer, and vice versa.
+
+    An engine nobody can watch tends to rot — the crystal sat unwired to
+    anything for a while and it took a question to notice. So the rule is not a
+    note in a guide, it is these tests: add an engine without a tab, or leave a
+    tab pointing at an engine that no longer exists, and the suite fails.
+
+    "Engine" is decided structurally rather than from a hand-written list, so a
+    new one is caught the day it lands: a class defined in a top-level module of
+    the package that has both `step` and `reset`.
+    """
+
+    @staticmethod
+    def engine_modules() -> set[str]:
+        found = set()
+        package = Path(anima_reborn.__file__).parent
+        for path in sorted(package.glob("*.py")):
+            if path.stem.startswith("_"):
+                continue
+            module = importlib.import_module(f"anima_reborn.{path.stem}")
+            for value in vars(module).values():
+                if (
+                    inspect.isclass(value)
+                    and value.__module__ == module.__name__
+                    and callable(getattr(value, "step", None))
+                    and callable(getattr(value, "reset", None))
+                ):
+                    found.add(path.stem)
+                    break
+        return found
+
+    @staticmethod
+    def page() -> str:
+        return PAGE.read_text(encoding="utf-8")
+
+    def test_every_engine_has_a_route(self) -> None:
+        missing = self.engine_modules() - set(Viewer().names())
+        assert not missing, (
+            f"engine(s) with no viewer route: {sorted(missing)} — "
+            "add a handler to _HANDLERS and an instance to Viewer.__init__"
+        )
+
+    def test_no_route_points_at_a_missing_engine(self) -> None:
+        orphans = set(Viewer().names()) - self.engine_modules()
+        assert not orphans, f"viewer route(s) with no engine: {sorted(orphans)}"
+
+    def test_every_route_has_a_tick_rate(self) -> None:
+        assert set(Viewer().names()) == set(TICK_RATES)
+
+    def test_every_route_has_a_tab_and_a_panel(self) -> None:
+        page = self.page()
+        for name in Viewer().names():
+            assert f'data-tab="{name}"' in page, f"{name} has no tab button"
+            assert f'id="p-{name}"' in page, f"{name} has no panel"
+
+    def test_exactly_one_tab_is_active(self) -> None:
+        page = self.page()
+        assert page.count('class="tab active"') == 1
+        assert page.count('class="panel active"') == 1
+
+    def test_the_default_tab_and_panel_agree(self) -> None:
+        page = self.page()
+        tab = re.search(r'class="tab active" data-tab="(\w+)"', page)
+        panel = re.search(r'class="panel active" id="p-(\w+)"', page)
+        active = re.search(r'let active = "(\w+)";', page)
+        assert tab and panel and active
+        assert tab.group(1) == panel.group(1) == active.group(1)
+
+    def test_every_route_is_drawable(self) -> None:
+        """A tab that streams frames nothing knows how to draw is a blank
+        panel, which looks like a broken engine."""
+        page = self.page()
+        prefix_line = page.split("const PREFIX =")[1].split("\n")[0]
+        for name in Viewer().names():
+            assert f"{name}:" in prefix_line, f"{name} is missing from the PREFIX map"
+            # The dispatch runs one branch per engine and falls through to the
+            # last, so the render function is the thing to check for — a name
+            # in the `if` chain would miss whichever engine is the `else`.
+            renderer = f"function render{name[0].upper()}{name[1:]}("
+            assert renderer in page, f"{name} has no {renderer.strip('(')} function"
+
+    def test_every_route_answers_with_a_drawable_frame(self) -> None:
+        viewer = Viewer(seed=1)
+        for name in viewer.names():
+            payload = viewer.advance(name, params(steps=60))
+            assert payload, name
+            assert json.loads(json.dumps(payload)) == payload, name
 
 
 def test_local_address_is_an_address() -> None:

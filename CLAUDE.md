@@ -23,6 +23,18 @@ Layout: `info` · `emergence` · `crystal` · `repulsion` · `pipeline` · `base
 - do: Korean in `viewer/page.html`; translate the DISPLAYED string only, via the `ko()` map · unmapped values fall through to the original
 - dont: Keying badge colour or any branch off a translated string · inventing a translation for an unmapped value
 
+## viewer-lockstep
+- do: Ship every engine change WITH its viewer change in the SAME commit · changed readout → update `describe()` and the panel drawing it, together
+- dont: Landing an engine no tab can show, or a tab pointing at a readout that moved
+
+## viewer-newengine
+- do: New engine → `_HANDLERS` + `Viewer.__init__` + `TICK_RATES` in `server.py`, then tab + panel + `PREFIX` + `render<Name>()` in `page.html`
+- dont: Trusting memory — `tests/test_viewer.py::TestEngineViewerLockstep` fails on each omission (engine = any top-level class with `step` and `reset`)
+
+## viewer-restart
+- do: Restart the viewer after ANY `.py` change — `page.html` is re-read per request but `server.py` is loaded once at start
+- dont: Assuming a browser refresh picks up Python edits — a fresh page calling a stale server presents as `스트림 끊김` (stream interrupted) in the UI
+
 ## engine-purity
 - do: Standard library only · zero runtime deps · every engine reproducible under `seed=` · all I/O confined to `viewer/`
 - dont: I/O, a clock, or a thread inside an engine

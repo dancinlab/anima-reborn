@@ -55,6 +55,17 @@ switches left nine threads running at 9× the intended rate;
 `tests/test_viewer.py::TestTicker::test_rapid_resubscribe_leaves_one_thread` fails
 loudly if the guard is removed.
 
+## Lockstep with the engines
+
+Every engine has a tab, and every tab has an engine — checked by
+`tests/test_viewer.py::TestEngineViewerLockstep`, not by memory. It fails on an engine
+with no route, a route with no engine, a missing tick rate, tab, panel, `PREFIX` entry or
+`render<Name>()`, and on a default tab that disagrees with `let active`.
+
+Restart after any `.py` edit: `page.html` is re-read on every request, `server.py` is
+loaded once at process start. A fresh page against a stale server is what
+`스트림 끊김` (stream interrupted) in the UI actually means.
+
 ## When adding an engine
 
 1. Add a handler class with `configure(engine, params)` and `describe(engine) -> dict`,

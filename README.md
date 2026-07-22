@@ -6,7 +6,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-none-success">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-208%20passing-success">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-216%20passing-success">
   <img alt="Origin" src="https://img.shields.io/badge/origin-dancinlab%2Fanima--experience-blueviolet">
 </p>
 
@@ -308,8 +308,13 @@ src/anima_reborn/
 ├─ iit4/          IIT 4.0 — Φ, hexa 원본과 비트단위 일치
 ├─ substrate.py   다리: 우리 엔진 → 측정된 전이행렬 → Φ
 └─ viewer/        브라우저 뷰어 — 이 패키지의 유일한 입출력
-tests/            208개, 네트워크 없음, 픽스처 없음
+tests/            216개, 네트워크 없음, 픽스처 없음
 ```
+
+엔진과 뷰어는 **함께 움직입니다** — 모든 엔진에는 탭이 있고 모든 탭에는 엔진이 있으며, 이건
+문서가 아니라 `tests/test_viewer.py::TestEngineViewerLockstep` 가 강제합니다. 라우트 누락 ·
+탭 누락 · 그리기 함수 누락 · 기본 탭 불일치를 각각 잡아냅니다. 엔진은 목록이 아니라 구조로
+판별하므로(`step()` 과 `reset()` 을 가진 클래스), 새 엔진을 추가한 날 바로 걸립니다.
 
 모든 엔진은 직접 한 틱씩 진행시키는 클래스입니다. `seed=` 로 재현하고, `run(n)` 으로 한꺼번에
 진행하고, `reset()` 으로 처음부터. 상태 객체는 frozen 데이터클래스라 그대로 비교·저장·단언할

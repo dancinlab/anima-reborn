@@ -27,6 +27,28 @@ there and keep them honest. `iit4/` has its own guide.
 `viewer/` is the browser view of all five, and the one place in this package that does
 I/O. The rules below apply to the engine files here, not to it — see its own guide.
 
+## Adding or changing an engine — the viewer moves with it
+
+An engine nobody can watch rots: the crystal sat wired to nothing for a while and it took
+a question to notice. So a viewer change ships in the **same commit** as the engine change,
+and it is enforced rather than remembered.
+
+New engine:
+
+1. `viewer/server.py` — a handler class with `configure` / `describe`, an entry in
+   `_HANDLERS`, an instance in `Viewer.__init__`, a `TICK_RATES` rate.
+2. `viewer/page.html` — a tab button, a panel, a `PREFIX` entry, and a `render<Name>()`
+   function. Korean UI text (`ui-language` in the repo root guide).
+3. Restart the viewer. `page.html` is re-read per request; `server.py` is not.
+
+Changed readout: update `describe()` **and** the panel that draws it, together.
+
+`tests/test_viewer.py::TestEngineViewerLockstep` fails on any of: an engine with no route,
+a route with no engine, a missing tick rate, a missing tab or panel, a missing render
+function, or a default tab that disagrees with `let active`. "Engine" is detected
+structurally — any class in a top-level module with both `step` and `reset` — so a new one
+is caught the day it lands, without anyone updating a list.
+
 ## Rules for changes here
 
 - **Standard library only.** No numpy, no torch. If a change seems to need one, it
