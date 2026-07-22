@@ -436,3 +436,89 @@ class TestWhatItDoesWithWhatItHolds:
         assert self._score(Wiring.RING, seed=1, loaded=False) == pytest.approx(
             0.5, abs=1e-12
         )
+
+
+class TestCapacityIsTopologyNotCount:
+    """Widening a single ring buys no capacity, and the way up is the wiring.
+
+    A single ring of any even width holds exactly one bit — a theorem (the
+    response is odd, decreasing, bounded, so no orbit longer than two) that
+    shows up as a measurement. `Wiring.PAIRS` spends the units on two-cycles
+    instead, and a weak inter-pair `chain` integrates them without collapsing
+    the capacity — but only for an ODD number of pairs, because an even number
+    forms a macro-ring that can agree globally and locks. Full sweep in
+    `state/communication/capacity.py`.
+    """
+
+    @staticmethod
+    def _settled(units, drive, *, wiring, chain, seed):
+        engine = CoupledEngine(
+            wiring=wiring, units=units, chain=chain, rhythm=ALTERNATING,
+            drive=drive, seed=seed, initial=(0.0,) * units,
+        )
+        engine.run(400)
+        engine.rhythm = FIXED
+        engine.drive = 0.0
+        return tuple(v > 0 for v in engine.run(240).values)
+
+    def _held(self, units, *, wiring, chain=0.0):
+        total = 1 << units
+        step = max(1, total // 64)
+        held = set()
+        for i in range(0, total, step):
+            drive = tuple((((i >> k) & 1) * 2 - 1) * 0.8 for k in range(units))
+            landed = {
+                self._settled(units, drive, wiring=wiring, chain=chain, seed=w)
+                for w in range(8)
+            }
+            if len(landed) == 1:
+                held |= landed
+        return len(held)
+
+    def test_the_single_ring_holds_one_bit_at_every_even_width(self) -> None:
+        for units in (4, 6, 8):
+            assert self._held(units, wiring=Wiring.RING) == 2, units
+
+    def test_pairs_hold_more_and_a_chain_makes_it_reproducible(self) -> None:
+        """Three pairs reach eight held states — three bits, not one."""
+        assert self._held(6, wiring=Wiring.PAIRS, chain=0.2) == 8
+
+    def test_chain_zero_leaves_every_wiring_bit_identical(self) -> None:
+        plain = CoupledEngine(seed=2, drive=0.3).run(300)
+        chained = CoupledEngine(seed=2, drive=0.3, chain=0.0).run(300)
+        assert plain.values == chained.values
+
+    def test_pairs_needs_an_even_width(self) -> None:
+        with pytest.raises(ValueError, match="pairs needs an even width"):
+            Wiring.PAIRS.sources_for(5)
+
+
+class TestChainedPairsIntegrate:
+    """The wall broken: six units that hold three bits AND measure as one thing.
+
+    Three disjoint pairs are three separate latches — capacity 3 bits, but a
+    factorized system whose directed Phi is a sampling artefact that collapses
+    under more trials. A weak inter-pair chain makes them irreducible, and the
+    held-under-4x-sampling test — not the magnitude, which the artefact inflates
+    at six units — is what separates the two. `RECURRENCE_FLOOR` was calibrated
+    at four units and does NOT transfer, which is exactly why the criterion here
+    is decay, not a threshold.
+    """
+
+    def test_disjoint_pairs_collapse_and_chained_pairs_hold(self) -> None:
+        def phi(chain: float, trials: int) -> float:
+            return statistics.mean(
+                coupled_phi(
+                    Wiring.PAIRS, units=6, chain=chain, state=0b010101,
+                    trials=trials, seed=s, with_complex=False,
+                ).directed_phi
+                for s in range(2)
+            )
+
+        disjoint_low, disjoint_high = phi(0.0, 400), phi(0.0, 1600)
+        chained_low, chained_high = phi(0.2, 400), phi(0.2, 1600)
+
+        # The null collapses with more sampling; the chained system holds.
+        assert disjoint_high < disjoint_low * 0.6, (disjoint_low, disjoint_high)
+        assert chained_high > chained_low * 0.8, (chained_low, chained_high)
+        assert chained_high > disjoint_high * 3

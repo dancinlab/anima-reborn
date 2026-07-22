@@ -352,6 +352,7 @@
           <option value="ring">고리 — 영향이 되돌아온다</option>
           <option value="feedforward">전방향 — 되돌아오지 않는다</option>
           <option value="self">자기참조 — 결합 없음</option>
+          <option value="pairs">쌍 — 두 유닛짜리 래치 (용량은 유닛 수가 아니라 배선)</option>
         </select>
       </label>
       <label class="ctl">리듬
@@ -827,11 +828,12 @@ function renderBase(d) {
   }
 }
 
-const WIRING_KO = { ring: "고리", feedforward: "전방향", self: "자기참조" };
+const WIRING_KO = { ring: "고리", feedforward: "전방향", self: "자기참조", pairs: "쌍" };
 const WIRING_TEXT = {
   ring: "닫힌 순환 — 영향이 출발점으로 되돌아옵니다. 어떤 방향을 끊어도 공짜가 아닙니다.",
   feedforward: "되먹임 없음 — 첫 유닛은 바깥에서만 받습니다. 그쪽으로 향하는 영향을 끊으면 잃을 게 없어, 이론은 이걸 환원가능이라 부릅니다.",
   self: "결합 없음 — 각 유닛이 자기만 읽습니다. 통합할 것이 애초에 없습니다.",
+  pairs: "교차결합 쌍 — 두 유닛이 서로를 읽는 래치. 고리 하나는 폭이 몇이든 1비트지만, 쌍 k개는 k비트를 담습니다. 용량은 유닛 수가 아니라 배선의 순환 구조입니다.",
 };
 
 function renderCoupled(d) {

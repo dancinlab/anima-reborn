@@ -70,8 +70,15 @@ bistable, and that is a derivation the measurement then confirmed.
 depends on whether the probe agrees with what it holds — 0.729 against a ceiling of
 0.758 that one bit allows, on 8/8 seeds, while every arm holding nothing is pinned at
 0.500 by construction (`state/communication/match.py`). A score near 1.0 there would be
-a bug, not a better result. The bound is now structural: four units hold one bit, more
-units hold more, and Phi stops being measurable past six.
+a bug, not a better result. The bound is topological, not a matter of size: a single ring of ANY even width holds
+exactly one bit (a theorem — the response is odd, decreasing, bounded, so no orbit longer
+than two), so widening it buys nothing. Capacity lives in the wiring's cycle structure, so
+`Wiring.PAIRS` (units/2 latches) with a weak inter-pair `chain` holds units/2 bits AND
+measures as integrated — 6 units, 3 bits, directed Phi held under 4x sampling where the
+disjoint null collapses. Two rules it forces: `RECURRENCE_FLOOR` was calibrated at four
+units and does NOT transfer (the artefact grows with width, so the decay test is the
+verdict past six, never the magnitude), and the chain only integrates for an ODD number of
+pairs — an even number forms a macro-ring that locks. `state/communication/capacity.py`.
 
 `base.py` is the one module here that is **not** a port: it composes the four under a
 single mortal clock. Its thesis, its measured constant `EPSILON`, and the line between

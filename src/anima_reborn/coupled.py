@@ -80,15 +80,30 @@ __all__ = [
     "MACRO_STEP",
     "HIGH",
     "PERIOD",
+    "UNITS",
+    "names_for",
 ]
 
 UNITS = 4
-"""a0, a1, g0, g1 — two dimensions of each engine.
+"""a0, a1, g0, g1 — two dimensions of each engine, and the default width.
 
 Four because exact Phi caps out around six units and the measurement is the
-point. This is a coupling demonstrator, not a scaled-up field."""
+point. `CoupledEngine(units=)` opens that up, and it opens up a wall with it:
+capacity grows with the units and Phi stops being computable past six, so a
+wider engine is one whose integration cannot be checked. Nothing above six may
+be called integrated on the strength of a narrower engine's reading."""
 
 NAMES = ("a0", "a1", "g0", "g1")
+"""Unit names at the default width. `names_for` generalizes them."""
+
+
+def names_for(units: int) -> tuple[str, ...]:
+    """`a0 a1 g0 g1` at the default width, `u0..uN` otherwise — a wider engine
+    is no longer two engines facing each other, and naming it as if it were
+    would be a claim about structure that is not there."""
+    if units == UNITS:
+        return NAMES
+    return tuple(f"u{i}" for i in range(units))
 
 AMPLITUDE = SEPARATION * 1.3
 """0.78 — the repulsion field's own leading-dimension target amplitude. Also the
@@ -130,20 +145,46 @@ class Wiring(Enum):
     reducible; `iit4.directed_big_phi` agrees, `iit4.big_phi` does not."""
     SELF = "self"
     """Each unit reads itself. No coupling — the null."""
+    PAIRS = "pairs"
+    """Cross-coupled pairs, each a two-unit latch, optionally chained.
+
+    A single ring of any EVEN width holds exactly one bit, and that is a
+    theorem rather than a measurement: each unit's response is odd, decreasing
+    and bounded, so it has no periodic orbit longer than two, and closing the
+    cycle admits only the alternating configuration and its negation. Widening
+    the ring therefore cannot buy capacity — measured at 4, 6 and 8 units, all
+    two patterns. Capacity lives in the CYCLE STRUCTURE of the wiring, so
+    `units / 2` two-cycles is the most a one-source-per-unit engine can hold.
+    """
+
+    def sources_for(self, units: int) -> tuple[int | None, ...]:
+        """Index each unit reads, or None for an exogenous constant.
+
+        At `units` 4 this returns exactly the tuples the engine was built with,
+        so widening the engine moved nothing that was already measured.
+        """
+        if units < 2:
+            raise ValueError(f"units must be >= 2, got {units}")
+        if self is Wiring.RING:
+            return tuple((i - 1) % units for i in range(units))
+        if self is Wiring.FEEDFORWARD:
+            return (None,) + tuple(range(units - 1))
+        if self is Wiring.PAIRS:
+            if units % 2:
+                raise ValueError(f"pairs needs an even width, got {units}")
+            return tuple(i ^ 1 for i in range(units))
+        return tuple(range(units))
 
     @property
     def sources(self) -> tuple[int | None, ...]:
-        """Index each unit reads, or None for an exogenous constant."""
-        return {
-            Wiring.RING: (3, 0, 1, 2),
-            Wiring.FEEDFORWARD: (None, 0, 1, 2),
-            Wiring.SELF: (0, 1, 2, 3),
-        }[self]
+        """The default-width wiring, kept because it is what every published
+        measurement used and what most callers still want."""
+        return self.sources_for(UNITS)
 
     @property
     def is_cyclic(self) -> bool:
         """Whether influence returns to where it started."""
-        return self is Wiring.RING
+        return self in (Wiring.RING, Wiring.PAIRS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,16 +240,16 @@ class Rhythm:
         return MACRO_STEP if self.period is None else self.period * 2
 
 
-def _as_drive(value: float | Sequence[float]) -> tuple[float, ...]:
+def _as_drive(value: float | Sequence[float], units: int = UNITS) -> tuple[float, ...]:
     """One value said to every unit, or one value per unit."""
     if isinstance(value, Sequence):
         values = tuple(float(v) for v in value)
-        if len(values) != UNITS:
+        if len(values) != units:
             raise ValueError(
-                f"drive must be one value or {UNITS}, got {len(values)}"
+                f"drive must be one value or {units}, got {len(values)}"
             )
     else:
-        values = (float(value),) * UNITS
+        values = (float(value),) * units
     for v in values:
         if not -1.0 <= v <= 1.0:
             raise ValueError(f"drive must be in [-1, 1], got {v}")
@@ -256,7 +297,10 @@ class CoupledState:
         return self.values[2], self.values[3]
 
     def __str__(self) -> str:
-        cells = " ".join(f"{n}={v:+.3f}" for n, v in zip(NAMES, self.values))
+        cells = " ".join(
+            f"{n}={v:+.3f}"
+            for n, v in zip(names_for(len(self.values)), self.values)
+        )
         return f"{cells} tension={self.tension:.3f} pattern={self.pattern:04b}"
 
 
@@ -269,6 +313,12 @@ class CoupledEngine:
         rhythm: When the units read each other. The default never lets go, which
             is the fixed coupling the wall is made of; `ALTERNATING` releases it
             half the time.
+        chain: How much of a unit's partner-response is replaced by the same
+            position one pair along. Zero leaves every wiring bit-identical.
+            Above zero the pairs form a macro-ring, and the same loop-sign
+            argument that makes an even ring hold one bit applies to that
+            macro-ring: an EVEN number of pairs can agree globally and locks to
+            one configuration, an ODD number cannot and keeps its pairs free.
         drive: What the engine is told, scaled by `amplitude`. One value in
             [-1, 1] says the same thing to every unit; a sequence of `UNITS`
             values says something different to each, which is what a vector
@@ -287,8 +337,10 @@ class CoupledEngine:
         self,
         *,
         wiring: Wiring = Wiring.RING,
+        units: int = UNITS,
         rhythm: Rhythm = FIXED,
         drive: float | Sequence[float] = 0.0,
+        chain: float = 0.0,
         gain: float = GAIN,
         amplitude: float = AMPLITUDE,
         seed: int | None = None,
@@ -298,7 +350,13 @@ class CoupledEngine:
             raise ValueError(f"gain must be > 0, got {gain}")
         if amplitude <= 0.0:
             raise ValueError(f"amplitude must be > 0, got {amplitude}")
+        if units < 2:
+            raise ValueError(f"units must be >= 2, got {units}")
+        if not 0.0 <= chain <= 1.0:
+            raise ValueError(f"chain must be in [0, 1], got {chain}")
         self.wiring = wiring
+        self.units = units
+        self.chain = chain
         self.rhythm = rhythm
         self.drive = drive
         self.gain = gain
@@ -307,9 +365,9 @@ class CoupledEngine:
         if initial is None:
             self._values = self._random_start()
         else:
-            if len(initial) != UNITS:
+            if len(initial) != self.units:
                 raise ValueError(
-                    f"initial must have {UNITS} values, got {len(initial)}"
+                    f"initial must have {self.units} values, got {len(initial)}"
                 )
             self._values = [float(v) for v in initial]
         self._tick = 0
@@ -323,10 +381,12 @@ class CoupledEngine:
     @drive.setter
     def drive(self, value: float | Sequence[float]) -> None:
         self._given = value
-        self._drive = _as_drive(value)
+        self._drive = _as_drive(value, self.units)
 
     def _random_start(self) -> list[float]:
-        return [(self._rng.random() - 0.5) * self.amplitude for _ in range(UNITS)]
+        return [
+            (self._rng.random() - 0.5) * self.amplitude for _ in range(self.units)
+        ]
 
     @property
     def values(self) -> tuple[float, ...]:
@@ -338,9 +398,23 @@ class CoupledEngine:
 
     @property
     def tension(self) -> float:
-        """Mean squared gap between the two engines' leading dimensions."""
-        a0, a1, g0, g1 = self._values
-        return ((a0 - g0) ** 2 + (a1 - g1) ** 2) / 2.0
+        """Mean squared gap between the two engines' dimensions.
+
+        The first half of the units is A and the second half is G, which at the
+        default width is exactly the `(a0-g0)^2 + (a1-g1)^2` over two that every
+        published reading used. An odd width has no such split and reads 0.0 —
+        stated rather than fudged, since inventing a pairing would put a number
+        where there is no gap to measure.
+        """
+        half = self.units // 2
+        if self.units % 2:
+            return 0.0
+        return (
+            sum(
+                (self._values[i] - self._values[i + half]) ** 2 for i in range(half)
+            )
+            / half
+        )
 
     @property
     def pattern(self) -> int:
@@ -354,7 +428,7 @@ class CoupledEngine:
         privileged starting point and reversing the unit order changes nothing.
         """
         previous = list(self._values)
-        sources = self.wiring.sources
+        sources = self.wiring.sources_for(self.units)
         coupling = self._coupling = self.rhythm.at(self._tick)
         # Scaled here rather than inside the target, so the multiply order is
         # the one every published number was measured under — `(1-c) * (d * a)`
@@ -367,6 +441,15 @@ class CoupledEngine:
                 else -self.amplitude
                 * math.tanh(self.gain * previous[source] / self.amplitude)
             )
+            if self.chain:
+                # Left alone at chain 0, so the wirings are what they always
+                # were. Each unit also hears the same position one pair along,
+                # which makes the pairs a macro-ring of inverting couplings —
+                # and the loop-sign argument then recurs one level up.
+                along = -self.amplitude * math.tanh(
+                    self.gain * previous[(i + 2) % self.units] / self.amplitude
+                )
+                partner = (1.0 - self.chain) * partner + self.chain * along
             # Left exactly alone at full coupling, so adding rhythms did not
             # move a single float of the engine as it was.
             target = (
@@ -392,10 +475,11 @@ class CoupledEngine:
     def observe(self) -> tuple[float, float]:
         """One noisy observation from each engine's leading unit, as the
         pipeline samples its streams."""
-        half = OBSERVATION_NOISE
+        noise = OBSERVATION_NOISE
+        other = self.units // 2
         return (
-            self._values[0] + (self._rng.random() - 0.5) * half,
-            self._values[2] + (self._rng.random() - 0.5) * half,
+            self._values[0] + (self._rng.random() - 0.5) * noise,
+            self._values[other] + (self._rng.random() - 0.5) * noise,
         )
 
     @property

@@ -325,6 +325,8 @@ class CoupledReading:
 def coupled_matrix(
     wiring: Wiring = Wiring.RING,
     *,
+    units: int = UNITS,
+    chain: float = 0.0,
     rhythm: Rhythm = FIXED,
     drive: float = 0.0,
     macro_step: int | None = None,
@@ -347,27 +349,35 @@ def coupled_matrix(
         macro_step = rhythm.macro_step
     if macro_step < 1:
         raise ValueError(f"macro_step must be >= 1, got {macro_step}")
+    if units > MAX_UNITS:
+        raise ValueError(
+            f"units must be <= {MAX_UNITS} to stay measurable, got {units}"
+        )
 
     def step(state: int, rng: random.Random) -> int:
         engine = CoupledEngine(
             wiring=wiring,
+            units=units,
+            chain=chain,
             rhythm=rhythm,
             drive=drive,
             gain=gain,
             amplitude=amplitude,
             seed=rng.getrandbits(63),
             initial=tuple(
-                amplitude if state >> i & 1 else -amplitude for i in range(4)
+                amplitude if state >> i & 1 else -amplitude for i in range(units)
             ),
         )
         return engine.run(macro_step).pattern
 
-    return estimate_matrix(4, step, trials=trials, seed=seed)
+    return estimate_matrix(units, step, trials=trials, seed=seed)
 
 
 def coupled_phi(
     wiring: Wiring = Wiring.RING,
     *,
+    units: int = UNITS,
+    chain: float = 0.0,
     rhythm: Rhythm = FIXED,
     drive: float = 0.0,
     state: int = 0b0101,
@@ -397,6 +407,8 @@ def coupled_phi(
         macro_step = rhythm.macro_step
     matrix = coupled_matrix(
         wiring,
+        units=units,
+        chain=chain,
         rhythm=rhythm,
         drive=drive,
         macro_step=macro_step,
