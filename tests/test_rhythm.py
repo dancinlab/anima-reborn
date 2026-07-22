@@ -361,3 +361,78 @@ class TestWhatSurvivesSilence:
             for w in range(8)
         }
         assert len(landed) == 1, landed
+
+
+class TestWhatItDoesWithWhatItHolds:
+    """The word "uses", and exactly how much of it is earned.
+
+    Loaded, then made deaf, the ring's response to a NEW input depends on
+    whether that input agrees with what it is holding — measured as how far it
+    has to move. Nothing is trained and no threshold is chosen; the match and
+    the foil are compared against each other on one loaded state and one walk.
+
+    The ceiling is derived rather than hoped for. What is held is one bit, so a
+    foil that loads the same basin is indistinguishable in principle and perfect
+    use scores about 0.76, never 1.0. Full protocol in
+    `state/communication/match.py`.
+    """
+
+    @staticmethod
+    def _corner(i: int) -> tuple[float, ...]:
+        return tuple((((i >> k) & 1) * 2 - 1) * 0.8 for k in range(4))
+
+    @staticmethod
+    def _hold(drive, *, wiring: Wiring, seed: int) -> tuple[float, ...]:
+        engine = CoupledEngine(
+            wiring=wiring, rhythm=ALTERNATING, drive=drive, seed=seed,
+            initial=(0.0,) * 4,
+        )
+        engine.run(400)
+        engine.rhythm = FIXED
+        engine.drive = 0.0
+        return engine.run(240).values
+
+    @staticmethod
+    def _revision(held, probe, *, wiring: Wiring, seed: int) -> float:
+        engine = CoupledEngine(
+            wiring=wiring, rhythm=ALTERNATING, drive=probe, seed=seed, initial=held
+        )
+        return statistics.mean(
+            sum((engine.step().values[i] - held[i]) ** 2 for i in range(4))
+            for _ in range(20)
+        )
+
+    def _score(self, wiring: Wiring, *, seed: int, loaded: bool = True) -> float:
+        drives = [self._corner(i) for i in range(16)]
+        hits = total = 0.0
+        for target in drives:
+            held = self._hold(
+                target if loaded else (0.0,) * 4, wiring=wiring, seed=seed
+            )
+            match = self._revision(held, target, wiring=wiring, seed=seed)
+            for foil in drives:
+                if foil == target:
+                    continue
+                against = self._revision(held, foil, wiring=wiring, seed=seed)
+                hits += 1.0 if match < against else 0.5 if match == against else 0.0
+                total += 1
+        return hits / total
+
+    def test_the_ring_answers_according_to_what_it_holds(self) -> None:
+        score = self._score(Wiring.RING, seed=1)
+        assert score > 0.6, score
+
+    def test_and_not_by_more_than_one_bit_would_allow(self) -> None:
+        """Above the derived ceiling would mean the probe is being compared
+        against something other than the bit the silence leaves behind."""
+        assert self._score(Wiring.RING, seed=1) < 0.80
+
+    def test_holding_nothing_is_pinned_at_chance_by_construction(self) -> None:
+        """Not luck. When the held state does not depend on what was told, a
+        comparison and its mirror use one identical state and disagree, so the
+        two cancel exactly."""
+        for wiring in (Wiring.FEEDFORWARD, Wiring.SELF):
+            assert self._score(wiring, seed=1) == pytest.approx(0.5, abs=1e-12)
+        assert self._score(Wiring.RING, seed=1, loaded=False) == pytest.approx(
+            0.5, abs=1e-12
+        )

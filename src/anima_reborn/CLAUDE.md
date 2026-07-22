@@ -64,8 +64,14 @@ Made deaf AFTER being told, the ring keeps its state forever while every acyclic
 falls to a fixed point — the first capability in this repo that recurrence buys rather
 than merely exhibits (`state/communication/silence.py`). It is exactly one bit: four sign
 inversions round the cycle make the loop's net sign positive, so the autonomous ring is
-bistable, and that is a derivation the measurement then confirmed. Say "holds", never
-"uses" — nothing consumes the held state.
+bistable, and that is a derivation the measurement then confirmed.
+
+"Uses" is now earned too, and only just: loaded then probed, the ring's own response
+depends on whether the probe agrees with what it holds — 0.729 against a ceiling of
+0.758 that one bit allows, on 8/8 seeds, while every arm holding nothing is pinned at
+0.500 by construction (`state/communication/match.py`). A score near 1.0 there would be
+a bug, not a better result. The bound is now structural: four units hold one bit, more
+units hold more, and Phi stops being measurable past six.
 
 `base.py` is the one module here that is **not** a port: it composes the four under a
 single mortal clock. Its thesis, its measured constant `EPSILON`, and the line between
