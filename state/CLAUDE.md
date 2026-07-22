@@ -6,9 +6,18 @@ rule — an experiment that lives only in `/tmp` did not happen.
 
 ```
 state/
-├─ lab/        delegated design reports (frontier models) + the prompts that produced them
-└─ coupling/   the ring-coupling measurement: script + results
+├─ lab/           delegated design reports (frontier models) + the prompts that produced them
+├─ coupling/      the ring-coupling measurement: script + results
+└─ communication/ what an engine would need in order to communicate: the
+                  integration/representation wall, the rhythm through it, and
+                  the two directions that died
 ```
+
+## a script here measures the engine, not a copy of it
+
+`alternating_coupling.py` first ran against a hand-rolled ring, and reproducing a claim
+about a copy is not evidence about anything anyone imports. Once a capability lands in
+`src/`, the script that re-derives it drives the shipped engine.
 
 ## what belongs here
 - do: Delegated reports · measurement runs · one-off verification scripts · the prompt that produced each report, stored beside it

@@ -48,6 +48,10 @@ own `CLAUDE.md`, and the local one wins.
 - do: Score a learner ONLY on held-out items, and report the gain over its own untrained baseline — which is measured, not assumed zero
 - dont: A verdict on a raw score · a learner with no control that removes what is supposed to teach it
 
+## default-stays-exact
+- do: A new engine parameter defaults to leaving the engine BIT-identical, pinned by a test — published Phi was measured on the old behaviour
+- dont: A default that shifts a trajectory "negligibly" · silently re-baselining every measured number in the docs
+
 ## engine-purity
 - do: Standard library only · zero runtime deps · every engine reproducible under `seed=` · all I/O confined to `viewer/`
 - dont: I/O, a clock, or a thread inside an engine

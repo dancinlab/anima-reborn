@@ -17,22 +17,28 @@ reproduce it. It does not.
 Representation is read off the trajectory (mean and variability of the last
 stretch) rather than the settling point, which is candidate three from
 `RESULTS.md` folded in — position alone loses what the trajectory keeps.
+
+**This script no longer simulates anything of its own.** It first ran against a
+hand-rolled copy of the ring, which measures a copy rather than the engine; the
+rhythm now lives in `coupled.Rhythm` and this drives the shipped engine through
+`substrate.representation` and `substrate.coupled_phi`. A re-derivation that
+reproduces a claim about a copy is not evidence about what anyone imports.
+
+**Two conditions this script exists to keep visible.** Phi rises with `tau` on
+its own, so a 20/20 rhythm (which needs tau 40 for one cycle) may not be read
+against a fixed coupling at tau 20 — the first version of this table did exactly
+that and produced a "matched-or-higher Phi" claim that does not survive. And a
+rhythm's Phi depends on the `drive`, because a rhythm can hear; a fixed engine's
+does not, because it cannot. Both are printed per row for that reason.
 """
 
 from __future__ import annotations
 
 import hashlib
-import math
-import random
 import statistics
-from collections.abc import Callable
 
-from anima_reborn.coupled import AMPLITUDE, GAIN, UNITS, Wiring
-from anima_reborn.iit4 import directed_big_phi
-from anima_reborn.pipeline import PULL, WALK
-from anima_reborn.substrate import estimate_matrix
-
-SOURCES = Wiring.RING.sources
+from anima_reborn.coupled import ALTERNATING, FIXED, HIGH, Rhythm
+from anima_reborn.substrate import coupled_phi, representation
 
 WORDS = [
     "고양이", "자동차", "바다", "연필", "하늘", "돌멩이", "웃음", "기차",
@@ -41,8 +47,15 @@ WORDS = [
 """Sixteen, because the effect scales with what the inputs carry and eight left
 the ratio close enough to the bar to be argued about."""
 
-HIGH = 0.7
-"""Coupling during the integrate phase."""
+TRIALS = 6400
+"""Samples per state for Phi. The artefact floor at 400 trials is 0.251 on a
+system whose true value is zero, which is the same order as the differences
+being compared here."""
+
+SEEDS = 5
+"""Enough that the tau-40 comparison separates without seed overlap — every
+alternating seed read below every fixed one. Three seeds hid an outlier that
+moved the mean by 0.26. The whole table takes about 40 minutes."""
 
 
 def encode(word: str) -> float:
@@ -50,110 +63,68 @@ def encode(word: str) -> float:
     return int.from_bytes(digest, "big") / 65535.0 * 2.0 - 1.0
 
 
-def alternating(period: int, high: float = HIGH) -> Callable[[int], float]:
-    """Off for `period` ticks, on for `period` ticks."""
-    return lambda tick: 0.0 if (tick // period) % 2 == 0 else high
+DRIVES = [encode(w) for w in WORDS]
 
 
-def fixed(value: float) -> Callable[[int], float]:
-    return lambda _tick: value
+DRIVE = 0.42
+"""What the engine is told while its Phi is measured. Fixed and printed because
+a rhythm's Phi moves with it: alternating 20/20 at tau 40 reads 14.99 told
+nothing, 13.16 told 0.42, and is indistinguishable from a fixed coupling told
+-0.27. A fixed engine reads the same whatever this is — it cannot hear."""
 
 
-def trajectory(
-    value: float, *, seed: int, coupling: Callable[[int], float], ticks: int = 800
-) -> list[list[float]]:
-    rng = random.Random(seed)
-    x = [0.0] * UNITS
-    out = []
-    for tick in range(ticks):
-        lam = coupling(tick)
-        previous = list(x)
-        for i, source in enumerate(SOURCES):
-            assert source is not None
-            partner = -AMPLITUDE * math.tanh(GAIN * previous[source] / AMPLITUDE)
-            target = (1.0 - lam) * (value * AMPLITUDE) + lam * partner
-            x[i] = previous[i] + (target - previous[i]) * PULL + (rng.random() - 0.5) * WALK
-        out.append(list(x))
-    return out
-
-
-def summarize(path: list[list[float]], tail: int = 300) -> list[float]:
-    """Mean AND variability per unit — the trajectory, not the endpoint."""
-    recent = path[-tail:]
-    return [statistics.mean(p[i] for p in recent) for i in range(UNITS)] + [
-        statistics.pstdev([p[i] for p in recent]) for i in range(UNITS)
+def integration(rhythm: Rhythm, *, macro_step: int) -> tuple[float, float]:
+    values = [
+        coupled_phi(
+            rhythm=rhythm,
+            drive=DRIVE,
+            macro_step=macro_step,
+            trials=TRIALS,
+            seed=s,
+            with_complex=False,
+        ).directed_phi
+        for s in range(SEEDS)
     ]
+    return statistics.mean(values), statistics.pstdev(values)
 
 
-def spread(points: list[list[float]]) -> float:
-    centre = [statistics.mean(p[i] for p in points) for i in range(len(points[0]))]
-    return statistics.mean(math.dist(p, centre) for p in points)
-
-
-def representation(coupling: Callable[[int], float], *, word_seed: int = 1) -> float:
-    by_word = spread(
-        [summarize(trajectory(encode(w), seed=word_seed, coupling=coupling)) for w in WORDS]
-    )
-    by_noise = spread(
-        [
-            summarize(trajectory(encode(WORDS[0]), seed=s, coupling=coupling))
-            for s in range(12)
-        ]
-    )
-    return by_word / max(by_noise, 1e-9)
-
-
-def integration(
-    coupling: Callable[[int], float], *, macro_step: int, trials: int = 6400, seeds: int = 3
-) -> float:
-    value = encode(WORDS[0])
-
-    def step(state: int, rng: random.Random) -> int:
-        x = [AMPLITUDE if state >> i & 1 else -AMPLITUDE for i in range(UNITS)]
-        for tick in range(macro_step):
-            lam = coupling(tick)
-            previous = list(x)
-            for i, source in enumerate(SOURCES):
-                assert source is not None
-                partner = -AMPLITUDE * math.tanh(GAIN * previous[source] / AMPLITUDE)
-                target = (1.0 - lam) * (value * AMPLITUDE) + lam * partner
-                x[i] = (
-                    previous[i] + (target - previous[i]) * PULL
-                    + (rng.random() - 0.5) * WALK
-                )
-        return sum(1 << i for i, v in enumerate(x) if v > 0)
-
+def represents(rhythm: Rhythm) -> float:
     return statistics.mean(
-        directed_big_phi(
-            estimate_matrix(UNITS, step, trials=trials, seed=s), 0b0101
-        ).phi
-        for s in range(seeds)
+        representation(DRIVES, rhythm=rhythm, seed=s).ratio for s in range(1, 4)
     )
 
 
 def main() -> None:
-    # Macro-step covers a whole listen/integrate cycle, and the fixed controls
-    # use the same span so the comparison is not about the window.
+    # Phi rises with the macro-step on its own — 12.07 at tau 17, 14.88 at 34 —
+    # so tau is printed per row and a comparison across two of them is not a
+    # comparison. The 20/20 rhythm needs tau 40 to cover one cycle, which is why
+    # the fixed controls appear at BOTH spans.
     cases = [
-        ("alternating 10/10", alternating(10), 20),
-        ("fixed 0.35 (same mean)", fixed(0.35), 20),
-        ("fixed 0.50", fixed(0.50), 20),
-        ("fixed 0.70", fixed(0.70), 20),
-        ("alternating 20/20", alternating(20), 40),
+        ("alternating 10/10", ALTERNATING, 20),
+        ("fixed 0.35 (same mean)", Rhythm(ALTERNATING.mean), 20),
+        ("fixed 0.70 (same peak)", Rhythm(HIGH), 20),
+        ("fixed 1.00 (the engine)", FIXED, 20),
+        ("alternating 20/20", Rhythm(HIGH, period=20), 40),
+        ("fixed 0.70 @ tau 40", Rhythm(HIGH), 40),
+        ("fixed 1.00 @ tau 40", FIXED, 40),
     ]
 
-    print(f"{'configuration':<26}{'directed Phi':>14}{'representation':>16}")
-    print("-" * 56)
-    for label, coupling, macro_step in cases:
-        phi = integration(coupling, macro_step=macro_step)
-        ratio = statistics.mean(
-            representation(coupling, word_seed=ws) for ws in range(1, 4)
+    print(f"drive = {DRIVE}, {TRIALS} trials, {SEEDS} seeds\n")
+    print(f"{'configuration':<26}{'tau':>5}{'directed Phi':>20}{'representation':>16}")
+    print("-" * 67)
+    for label, rhythm, macro_step in cases:
+        mean, deviation = integration(rhythm, macro_step=macro_step)
+        print(
+            f"{label:<26}{macro_step:>5}{mean:>13.3f} +/-{deviation:5.3f}"
+            f"{represents(rhythm):>16.2f}"
         )
-        print(f"{label:<26}{phi:>14.3f}{ratio:>16.2f}")
 
     print(
-        "\nthe comparison that survives: at matched-or-higher integration,"
-        "\nalternating keeps representation that fixed coupling destroys."
+        "\nRead this at ONE tau at a time. Within tau 20 the honest comparison is"
+        "\nagainst the same-mean control, which alternating beats on BOTH axes."
+        "\nWhat a rhythm buys is representation a fixed coupling has none of; it"
+        "\ndoes NOT buy more integration, and the row-against-row reading that"
+        "\nsaid it did was comparing two different taus."
     )
 
 

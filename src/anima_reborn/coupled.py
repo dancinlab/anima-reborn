@@ -31,6 +31,32 @@ depends on the state, the binarization threshold, the reconstruction amplitude
 and — most easily forgotten — the macro-step. At one engine tick a unit moves 6%
 toward its target, so every unit merely copies itself and Phi is 0.0000 exactly.
 Quoting a value without its `tau` is a false statement, not a shorthand.
+
+**The wall.** Once a `drive` is added — something the engine is told, rather
+than only what it tells itself — a second measurement appears: how much of what
+it was told survives in where it ends up. Sweeping the coupling shows the two
+trade off monotonically. Coupling low enough to represent the drive integrates
+nothing; coupling high enough to integrate lets the ring's own attractor swamp
+the drive. At coupling 1.0 the drive is not merely weak but unreachable, bit for
+bit. There is no fixed coupling where both hold.
+
+**The rhythm moves that trade-off. It does not abolish it.** `Rhythm` alternates
+— listen with the coupling off, integrate with it on. Measured at a matched
+macro-step of 40 over five seeds: alternating 20/20 reads Phi 13.16 +/- 0.53
+with representation 3.49, against fixed 1.00 at 14.66 +/- 0.08 with
+representation 0.00, and fixed 0.70 at 15.74 +/- 0.13 with 0.13. So a rhythm
+buys representation the fixed engine has *none* of, and pays 10-16% of Phi for
+it — a better exchange rate, not an escape.
+
+It does NOT integrate more. An earlier reading here said it did, and that
+reading put a rhythm at tau 40 beside fixed couplings at tau 20; Phi rises with
+tau on its own, so the two rows were never comparable. Never read a row of this
+comparison against a row at a different tau.
+
+What does survive is that the effect is the rhythm's rather than the mean's,
+which is the control that matters and is measured at ITS own matched tau of 20:
+alternating 10/10 reads Phi 2.08 against the same-mean fixed control's 1.16, and
+beats it on representation too, 4.03 against 3.27.
 """
 
 from __future__ import annotations
@@ -43,7 +69,17 @@ from enum import Enum
 from .pipeline import OBSERVATION_NOISE, PULL, WALK
 from .repulsion import SEPARATION
 
-__all__ = ["Wiring", "CoupledEngine", "CoupledState", "AMPLITUDE", "GAIN", "MACRO_STEP"]
+__all__ = [
+    "Wiring",
+    "Rhythm",
+    "CoupledEngine",
+    "CoupledState",
+    "AMPLITUDE",
+    "GAIN",
+    "MACRO_STEP",
+    "HIGH",
+    "PERIOD",
+]
 
 UNITS = 4
 """a0, a1, g0, g1 — two dimensions of each engine.
@@ -69,6 +105,16 @@ MACRO_STEP = 17
 target, every unit is dominated by its own previous value, the transition matrix
 factorizes and Phi is exactly zero for *every* wiring including the ring.
 Measured: 0.0000 at tau 1 and 5, 12.07 at 17, 14.88 at 34."""
+
+HIGH = 0.7
+"""Coupling during a rhythm's integrate phase. Enough for the ring to be
+irreducible while it is on; the point of alternating is that it does not have to
+be on all the time."""
+
+PERIOD = 10
+"""Engine ticks per phase — ten off, ten on. Not tuned for the best number:
+10/10 and 20/20 both break the wall, and the claim is the rhythm rather than a
+particular tempo."""
 
 
 class Wiring(Enum):
@@ -100,6 +146,66 @@ class Wiring(Enum):
 
 
 @dataclass(frozen=True, slots=True)
+class Rhythm:
+    """How much of a unit's target is its partner, over time.
+
+    A single number would be a fixed coupling, and a fixed coupling is exactly
+    what the wall is made of: below it the ring represents what it was told and
+    integrates nothing; above it the ring integrates and its own attractor
+    swamps what it was told. Making the coupling a function of the tick is the
+    smallest change that escapes, because the two demands are then met at
+    different times instead of at the same one.
+
+    `Rhythm()` is a fixed coupling of 1.0 — every unit's target is entirely its
+    partner, which is what this engine did before rhythms existed and still does
+    by default.
+    """
+
+    coupling: float = 1.0
+    """Coupling while the integrate phase is on, in [0, 1]."""
+    period: int | None = None
+    """Ticks per phase, or None for a fixed coupling that never lets go."""
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.coupling <= 1.0:
+            raise ValueError(f"coupling must be in [0, 1], got {self.coupling}")
+        if self.period is not None and self.period < 1:
+            raise ValueError(f"period must be >= 1, got {self.period}")
+
+    def at(self, tick: int) -> float:
+        """Coupling at a tick. Alternating rhythms start in the listen phase, so
+        a run begins by taking in its drive rather than by settling."""
+        if self.period is None:
+            return self.coupling
+        return 0.0 if (tick // self.period) % 2 == 0 else self.coupling
+
+    @property
+    def alternates(self) -> bool:
+        return self.period is not None
+
+    @property
+    def mean(self) -> float:
+        """Time-average coupling — the number a fixed control must match. An
+        alternating rhythm that beat a fixed coupling at its own mean did not
+        win by having more coupling."""
+        return self.coupling if self.period is None else self.coupling / 2.0
+
+    @property
+    def macro_step(self) -> int:
+        """Ticks per measured transition. A rhythm must be measured over a whole
+        listen/integrate cycle: half a cycle would report one phase's transition
+        matrix and call it the engine's."""
+        return MACRO_STEP if self.period is None else self.period * 2
+
+
+FIXED = Rhythm()
+"""The default — coupling 1.0, never released."""
+
+ALTERNATING = Rhythm(coupling=HIGH, period=PERIOD)
+"""Ten ticks listening, ten integrating. The measured wall-break."""
+
+
+@dataclass(frozen=True, slots=True)
 class CoupledState:
     """One reading of the coupled field."""
 
@@ -115,6 +221,14 @@ class CoupledState:
     """The units binarized at zero, one bit each — the state Phi would be
     measured at. `0b0101` is the ring's own attractor."""
     ticks: int
+    coupling: float = 1.0
+    """How much of each unit's target was its partner on the tick that produced
+    this reading. Constant unless the engine runs a rhythm."""
+
+    @property
+    def listening(self) -> bool:
+        """Whether the drive, rather than the ring, set the targets this tick."""
+        return self.coupling == 0.0
 
     @property
     def a(self) -> tuple[float, float]:
@@ -135,6 +249,13 @@ class CoupledEngine:
     Args:
         wiring: Who reads whom. `Wiring.RING` is the engine; the other two exist
             so the claim can be falsified with the same code.
+        rhythm: When the units read each other. The default never lets go, which
+            is the fixed coupling the wall is made of; `ALTERNATING` releases it
+            half the time.
+        drive: What the engine is told, in [-1, 1], scaled by `amplitude`. Only
+            reachable while the coupling is below 1.0 — at full coupling a unit's
+            target is entirely its partner and nothing outside can be heard,
+            which is the wall stated as an equation.
         gain: Steepness of each unit's response to what it reads.
         amplitude: Target amplitude a saturated response reaches.
         seed: Fixes the initial positions and the walk.
@@ -146,6 +267,8 @@ class CoupledEngine:
         self,
         *,
         wiring: Wiring = Wiring.RING,
+        rhythm: Rhythm = FIXED,
+        drive: float = 0.0,
         gain: float = GAIN,
         amplitude: float = AMPLITUDE,
         seed: int | None = None,
@@ -155,7 +278,11 @@ class CoupledEngine:
             raise ValueError(f"gain must be > 0, got {gain}")
         if amplitude <= 0.0:
             raise ValueError(f"amplitude must be > 0, got {amplitude}")
+        if not -1.0 <= drive <= 1.0:
+            raise ValueError(f"drive must be in [-1, 1], got {drive}")
         self.wiring = wiring
+        self.rhythm = rhythm
+        self.drive = drive
         self.gain = gain
         self.amplitude = amplitude
         self._rng = random.Random(seed)
@@ -168,6 +295,7 @@ class CoupledEngine:
                 )
             self._values = [float(v) for v in initial]
         self._tick = 0
+        self._coupling = self.rhythm.at(0)
 
     def _random_start(self) -> list[float]:
         return [(self._rng.random() - 0.5) * self.amplitude for _ in range(UNITS)]
@@ -199,12 +327,21 @@ class CoupledEngine:
         """
         previous = list(self._values)
         sources = self.wiring.sources
+        coupling = self._coupling = self.rhythm.at(self._tick)
+        heard = self.drive * self.amplitude
         for i, source in enumerate(sources):
-            target = (
+            partner = (
                 -self.amplitude
                 if source is None
                 else -self.amplitude
                 * math.tanh(self.gain * previous[source] / self.amplitude)
+            )
+            # Left exactly alone at full coupling, so adding rhythms did not
+            # move a single float of the engine as it was.
+            target = (
+                partner
+                if coupling == 1.0
+                else (1.0 - coupling) * heard + coupling * partner
             )
             self._values[i] = (
                 previous[i]
@@ -237,10 +374,18 @@ class CoupledEngine:
             tension=self.tension,
             pattern=self.pattern,
             ticks=self._tick,
+            coupling=self._coupling,
         )
 
+    @property
+    def coupling(self) -> float:
+        """The coupling on the tick that produced the current values — before any
+        step has run, the one the next will use."""
+        return self._coupling
+
     def reset(self) -> None:
-        """Re-randomize the positions. The wiring is what the engine *is* and
-        does not change."""
+        """Re-randomize the positions. The wiring and the rhythm are what the
+        engine *is* and do not change."""
         self._values = self._random_start()
         self._tick = 0
+        self._coupling = self.rhythm.at(0)

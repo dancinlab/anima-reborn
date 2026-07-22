@@ -354,9 +354,27 @@
           <option value="self">자기참조 — 결합 없음</option>
         </select>
       </label>
+      <label class="ctl">리듬
+        <select id="cp-rhythm" style="background:#232838;color:#e6e8ef;border:1px solid #2b303b;border-radius:6px;padding:5px 9px;font:inherit;font-size:12.5px">
+          <option value="fixed">고정 — 결합을 놓지 않는다</option>
+          <option value="alternating">교대 — 10틱 듣고 10틱 통합</option>
+        </select>
+      </label>
       <label class="ctl">이득 <input type="range" id="cp-gain" min="5" max="80" value="30"><b id="cp-gain-v">3.0</b></label>
+      <label class="ctl">입력 <input type="range" id="cp-drive" min="-10" max="10" value="0"><b id="cp-drive-v">0.0</b></label>
       <button class="act" data-reset="coupled">초기화</button>
     </div>
+
+    <p class="note">
+      <strong>벽:</strong> 결합이 고정이면 통합과 표현은 <em>양립하지 않습니다</em>. 결합이 낮으면
+      들은 것은 남지만 통합이 0 이고, 높으면 통합은 생기지만 고리 자신의 끌개가 들은 것을 덮습니다.
+      둘 다 되는 고정값은 없습니다 — <strong>고정</strong>에서 입력 슬라이더를 아무리 움직여도
+      막대가 꿈쩍하지 않는 것이 그 벽입니다. <strong>교대</strong>로 바꾸면 같은 슬라이더가 듣는
+      구간에서 막대를 움직입니다. 요구를 <em>같은 시점</em>이 아니라 <em>다른 시점</em>에 나눠
+      맞추는 것이죠. 다만 <strong>벽을 넘는 게 아니라 교환비를 옮기는 것</strong>입니다 —
+      교대는 고정 결합이 전혀 갖지 못한 표상을 얻는 대신 Φ 를 10~16% 내줍니다.
+      <em>Φ 를 더 번다는 앞선 판독은 τ 가 다른 두 행을 맞댄 것이라 철회했습니다.</em>
+    </p>
 
     <div class="grid-scatter">
       <div>
@@ -376,6 +394,8 @@
       <div class="metric"><div class="k">배선</div><div class="v"><span class="badge" id="cp-wiring-b">—</span></div></div>
       <div class="metric"><div class="k">간극(tension)</div><div class="v" id="cp-tension">—</div></div>
       <div class="metric"><div class="k">패턴</div><div class="v" id="cp-pattern-v">—</div></div>
+      <div class="metric"><div class="k">국면</div><div class="v"><span class="badge" id="cp-phase-b">—</span></div></div>
+      <div class="metric"><div class="k">결합 λ</div><div class="v" id="cp-coupling">—</div></div>
       <div class="metric"><div class="k">틱</div><div class="v" id="cp-ticks">—</div></div>
     </div>
     <div class="status" id="cp-status"></div>
@@ -642,7 +662,8 @@ function controlsFor(name) {
   if (name === "crystal") return { epsilon: $("cr-eps").value / 100 };
   if (name === "repulsion") return { separation: $("rp-sep").value / 100, noise: $("rp-noise").value / 100 };
   if (name === "base") return { epsilon: $("bs-eps").value / 100, separation: $("bs-sep").value / 100 };
-  if (name === "coupled") return { wiring: $("cp-wiring").value, gain: $("cp-gain").value / 10 };
+  if (name === "coupled") return { wiring: $("cp-wiring").value, rhythm: $("cp-rhythm").value,
+                                   gain: $("cp-gain").value / 10, drive: $("cp-drive").value / 10 };
   if (name === "align") return { rate: $("al-rate").value / 1000, noise: $("al-noise").value / 100,
                                  shuffled: $("al-shuffled").checked ? "1" : "0" };
   return { separation: $("pl-sep").value / 100 };
@@ -872,10 +893,13 @@ function renderCoupled(d) {
   setBadge($("cp-wiring-b"), WIRING_KO[d.wiring] || d.wiring, d.cyclic ? "good" : "");
   $("cp-tension").textContent = d.tension.toFixed(3);
   $("cp-pattern-v").textContent = d.pattern.toString(2).padStart(4, "0");
+  setBadge($("cp-phase-b"), d.listening ? "듣는 중" : "통합 중", d.listening ? "" : "good");
+  $("cp-coupling").textContent = d.coupling.toFixed(2);
   $("cp-ticks").textContent = d.ticks;
   const status = $("cp-status");
   status.className = "status";
-  status.textContent = WIRING_TEXT[d.wiring] || "";
+  const wall = d.reachable ? "" : " · 결합이 1.00 이라 입력이 닿을 틈이 없습니다 (벽)";
+  status.textContent = (WIRING_TEXT[d.wiring] || "") + wall;
 }
 
 const LEARNED = [];   // 배운 양의 이력 — 곡선이 자라는 걸 본다
@@ -955,13 +979,14 @@ const SLIDERS = [
   ["bs-eps", "bs-eps-v", "base"],
   ["bs-sep", "bs-sep-v", "base"],
   ["cp-gain", "cp-gain-v", "coupled"],
+  ["cp-drive", "cp-drive-v", "coupled"],
   ["al-rate", "al-rate-v", "align"],
   ["al-noise", "al-noise-v", "align"],
 ];
 for (const [input, output, engine] of SLIDERS) {
   const el = $(input), out = $(output);
-  // 이득만 0.5~8.0 범위라 10으로 나눈다 — 나머지 슬라이더는 전부 0~1 비율이다.
-  const divisor = input === "cp-gain" ? 10 : (input === "al-rate" ? 1000 : 100);
+  // 이득(0.5~8.0)과 입력(-1~1)만 10으로 나눈다 — 나머지 슬라이더는 전부 0~1 비율이다.
+  const divisor = (input === "cp-gain" || input === "cp-drive") ? 10 : (input === "al-rate" ? 1000 : 100);
   const digits = divisor === 10 ? 1 : (divisor === 1000 ? 3 : 2);
   const sync = () => { out.textContent = (el.value / divisor).toFixed(digits); };
   el.addEventListener("input", () => { sync(); pushControls(engine); });
@@ -969,6 +994,7 @@ for (const [input, output, engine] of SLIDERS) {
 }
 
 $("cp-wiring").addEventListener("change", () => pushControls("coupled"));
+$("cp-rhythm").addEventListener("change", () => pushControls("coupled"));
 $("al-shuffled").addEventListener("change", () => { LEARNED.length = 0; pushControls("align"); });
 
 for (const button of document.querySelectorAll("[data-reset]")) {

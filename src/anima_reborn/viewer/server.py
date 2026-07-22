@@ -33,7 +33,13 @@ from urllib.parse import parse_qs, urlparse
 
 from ..align import Aligner
 from ..base import BaseEngine
-from ..coupled import NAMES as COUPLED_NAMES, CoupledEngine, Wiring
+from ..coupled import (
+    ALTERNATING,
+    FIXED,
+    NAMES as COUPLED_NAMES,
+    CoupledEngine,
+    Wiring,
+)
 from ..crystal import TimeCrystal
 from ..emergence import EmergenceEngine
 from ..pipeline import Pipeline
@@ -225,6 +231,10 @@ class _CoupledHandler:
     dynamics and the measurement is a separate, deliberate act — the operator
     presses for it. A number this conditional should not arrive as ambient
     decoration.
+
+    The rhythm is the one control here whose effect is visible without any
+    measurement: on a fixed coupling the drive slider does nothing at all, which
+    is the wall as something to watch rather than a claim to read.
     """
 
     @staticmethod
@@ -238,7 +248,17 @@ class _CoupledHandler:
             if wiring is not engine.wiring:
                 engine.wiring = wiring
                 engine.reset()  # a different wiring is a different system
+        rhythms = params.get("rhythm")
+        if rhythms:
+            # Unknown value keeps the current rhythm, as with every control here.
+            rhythm = {"fixed": FIXED, "alternating": ALTERNATING}.get(
+                rhythms[0], engine.rhythm
+            )
+            if rhythm != engine.rhythm:
+                engine.rhythm = rhythm
+                engine.reset()  # a different rhythm is a different system
         engine.gain = max(0.1, _number(params, "gain", engine.gain))
+        engine.drive = max(-1.0, min(1.0, _number(params, "drive", engine.drive)))
 
     @staticmethod
     def describe(engine: CoupledEngine) -> dict[str, Any]:
@@ -256,6 +276,12 @@ class _CoupledHandler:
             "tension": state.tension,
             "pattern": state.pattern,
             "ticks": state.ticks,
+            "rhythm": "alternating" if engine.rhythm.alternates else "fixed",
+            "period": engine.rhythm.period or 0,
+            "drive": engine.drive,
+            "coupling": round(state.coupling, 4),
+            "listening": state.listening,
+            "reachable": engine.rhythm.mean < 1.0,
         }
 
 

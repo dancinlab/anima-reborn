@@ -36,11 +36,22 @@ risk.
 
 from __future__ import annotations
 
+import math
 import random
+import statistics
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from .coupled import AMPLITUDE, GAIN, MACRO_STEP, CoupledEngine, Wiring
+from .coupled import (
+    AMPLITUDE,
+    FIXED,
+    GAIN,
+    MACRO_STEP,
+    UNITS,
+    CoupledEngine,
+    Rhythm,
+    Wiring,
+)
 from .crystal import COUPLING, EPSILON, INVERSE_TEMPERATURE, CrystalVerdict, TimeCrystal
 from .iit4 import (
     Complex,
@@ -56,9 +67,11 @@ __all__ = [
     "CoupledReading",
     "RECURRENCE_FLOOR",
     "RecurrenceEvidence",
+    "Representation",
     "SubstrateReading",
     "coupled_matrix",
     "coupled_phi",
+    "representation",
     "recurrence_evidence",
     "binarize",
     "crystal_matrix",
@@ -311,7 +324,9 @@ class CoupledReading:
 def coupled_matrix(
     wiring: Wiring = Wiring.RING,
     *,
-    macro_step: int = MACRO_STEP,
+    rhythm: Rhythm = FIXED,
+    drive: float = 0.0,
+    macro_step: int | None = None,
     gain: float = GAIN,
     amplitude: float = AMPLITUDE,
     trials: int = TRIALS,
@@ -322,13 +337,21 @@ def coupled_matrix(
     One transition is `macro_step` engine ticks: reconstruct the units to
     +/-`amplitude` from the state, run, threshold at zero. Reconstruction
     amplitude and macro-step both sit inside the result.
+
+    A rhythm must be measured over a whole listen/integrate cycle, so the
+    default macro-step follows the rhythm rather than the module constant. Half
+    a cycle would report one phase's matrix and label it the engine's.
     """
+    if macro_step is None:
+        macro_step = rhythm.macro_step
     if macro_step < 1:
         raise ValueError(f"macro_step must be >= 1, got {macro_step}")
 
     def step(state: int, rng: random.Random) -> int:
         engine = CoupledEngine(
             wiring=wiring,
+            rhythm=rhythm,
+            drive=drive,
             gain=gain,
             amplitude=amplitude,
             seed=rng.getrandbits(63),
@@ -344,8 +367,10 @@ def coupled_matrix(
 def coupled_phi(
     wiring: Wiring = Wiring.RING,
     *,
+    rhythm: Rhythm = FIXED,
+    drive: float = 0.0,
     state: int = 0b0101,
-    macro_step: int = MACRO_STEP,
+    macro_step: int | None = None,
     gain: float = GAIN,
     amplitude: float = AMPLITUDE,
     trials: int = TRIALS,
@@ -357,14 +382,22 @@ def coupled_phi(
     Args:
         wiring: Which engine to measure. Pass `Wiring.SELF` or
             `Wiring.FEEDFORWARD` for the falsifiers.
+        rhythm: When the units read each other. Integration is a property of the
+            engine *including its rhythm*, so this sits in the reading.
+        drive: What the engine is being told while measured.
         state: Which pattern to measure at — Phi belongs to a system *in a
             state*. The default is the ring's own attractor.
-        macro_step: Engine ticks per measured transition. At 1 every wiring
-            reads exactly zero; see `coupled.MACRO_STEP`.
+        macro_step: Engine ticks per measured transition. Defaults to the
+            rhythm's own cycle. At 1 every wiring reads exactly zero; see
+            `coupled.MACRO_STEP`.
         trials: Samples per state. The artefact floor falls with this.
     """
+    if macro_step is None:
+        macro_step = rhythm.macro_step
     matrix = coupled_matrix(
         wiring,
+        rhythm=rhythm,
+        drive=drive,
         macro_step=macro_step,
         gain=gain,
         amplitude=amplitude,
@@ -383,6 +416,145 @@ def coupled_phi(
         state=state,
         macro_step=macro_step,
         trials=trials,
+    )
+
+
+REPRESENTATION_TICKS = 800
+"""Ticks per trajectory. Long enough that the ring has settled into whatever it
+settles into, so the reading is not about the transient."""
+
+REPRESENTATION_TAIL = 300
+"""Ticks summarized, taken from the end. Mean AND variability per unit, because
+an alternating engine never stops moving and its position alone throws away what
+its motion keeps."""
+
+NOISE_SEEDS = 12
+"""Repeats of ONE drive under different walks — the within-drive spread that the
+between-drive spread has to beat. This is the null, and it is structural rather
+than chosen: at a ratio of 1.0 the drives separate exactly as much as the same
+drive separates from itself."""
+
+
+@dataclass(frozen=True, slots=True)
+class Representation:
+    """How much of what an engine was told survives in what it does.
+
+    Two spreads, in the same units. `by_drive` is how far apart different drives
+    put the engine; `by_noise` is how far apart ONE drive puts it across
+    different walks. Their ratio is the reading, and 1.0 is the floor by
+    construction rather than by choice.
+    """
+
+    by_drive: float
+    by_noise: float
+    drives: int
+    ticks: int
+
+    @property
+    def ratio(self) -> float:
+        return self.by_drive / max(self.by_noise, 1e-9)
+
+    @property
+    def represents(self) -> bool:
+        """Whether the drive is recoverable from the trajectory at all."""
+        return self.ratio > 1.0
+
+    def __str__(self) -> str:
+        return (
+            f"representation={self.ratio:6.2f} "
+            f"(between {self.by_drive:.4f} / within {self.by_noise:.4f}, "
+            f"{self.drives} drives, {self.ticks} ticks)"
+            f"{'' if self.represents else ' [at the noise floor]'}"
+        )
+
+
+def _signature(
+    drive: float,
+    *,
+    wiring: Wiring,
+    rhythm: Rhythm,
+    seed: int,
+    ticks: int,
+    tail: int,
+    gain: float,
+    amplitude: float,
+) -> list[float]:
+    """Mean and variability per unit over the trajectory's tail."""
+    engine = CoupledEngine(
+        wiring=wiring,
+        rhythm=rhythm,
+        drive=drive,
+        gain=gain,
+        amplitude=amplitude,
+        seed=seed,
+        initial=(0.0,) * UNITS,
+    )
+    recent: list[tuple[float, ...]] = []
+    for tick in range(ticks):
+        values = engine.step().values
+        if tick >= ticks - tail:
+            recent.append(values)
+    return [
+        statistics.mean(point[i] for point in recent) for i in range(UNITS)
+    ] + [statistics.pstdev([point[i] for point in recent]) for i in range(UNITS)]
+
+
+def _spread(points: Sequence[Sequence[float]]) -> float:
+    centre = [statistics.mean(p[i] for p in points) for i in range(len(points[0]))]
+    return statistics.mean(math.dist(p, centre) for p in points)
+
+
+def representation(
+    drives: Sequence[float],
+    *,
+    wiring: Wiring = Wiring.RING,
+    rhythm: Rhythm = FIXED,
+    seed: int = 1,
+    noise_seeds: int = NOISE_SEEDS,
+    ticks: int = REPRESENTATION_TICKS,
+    tail: int = REPRESENTATION_TAIL,
+    gain: float = GAIN,
+    amplitude: float = AMPLITUDE,
+) -> Representation:
+    """Measure how much of its drive an engine's trajectory still carries.
+
+    The other half of the wall. `coupled_phi` says whether the engine is
+    irreducible; this says whether anything it was told is still in it. On a
+    fixed coupling the two trade off monotonically and there is no setting where
+    both hold — which is why `Rhythm` exists.
+
+    Args:
+        drives: What to tell the engine, one value per trial, in [-1, 1].
+        rhythm: When the units read each other. This is the argument the
+            measurement is about.
+        seed: Fixes the walk for the between-drive comparison, so different
+            drives differ by their drive and not by their noise.
+        noise_seeds: Repeats of `drives[0]` that form the within-drive null.
+    """
+    if len(drives) < 2:
+        raise ValueError(f"drives must have at least 2 values, got {len(drives)}")
+    if noise_seeds < 2:
+        raise ValueError(f"noise_seeds must be >= 2, got {noise_seeds}")
+    if tail < 2 or tail > ticks:
+        raise ValueError(f"tail must be in [2, {ticks}], got {tail}")
+
+    def signature(drive: float, walk: int) -> list[float]:
+        return _signature(
+            drive,
+            wiring=wiring,
+            rhythm=rhythm,
+            seed=walk,
+            ticks=ticks,
+            tail=tail,
+            gain=gain,
+            amplitude=amplitude,
+        )
+
+    return Representation(
+        by_drive=_spread([signature(d, seed) for d in drives]),
+        by_noise=_spread([signature(drives[0], w) for w in range(noise_seeds)]),
+        drives=len(drives),
+        ticks=ticks,
     )
 
 

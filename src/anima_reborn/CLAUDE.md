@@ -14,7 +14,7 @@ Rendering, timers and DOM wiring stay in the origin; only the maths lives here.
 | `repulsion.py` | A × G latent field | A × G tab (moods from `tension_link.py`) |
 | `pipeline.py` | repulsion → sampled streams → emergence | pipeline tab |
 | `base.py` | all four under the crystal's clock — rotation only while LOCKED | (new — not in the origin) |
-| `coupled.py` | A and G reading each other — the only engine here with nonzero integration | (new — not in the origin) |
+| `coupled.py` | A and G reading each other — the only engine here with nonzero integration, and `Rhythm`, which is when they do | (new — not in the origin) |
 | `align.py` | the only module that LEARNS — co-occurrence teaches two modalities to meet | (new — not in the origin) |
 | `substrate.py` | drive an engine from every state → measured TPM → Phi | (new — not in the origin) |
 | `words.py` | words as a continuing drive, always paired with a null control | (new — not in the origin) |
@@ -27,6 +27,16 @@ unit reads itself and something exogenous, which is why Phi is zero by architect
 the source is a live partner. Its falsifiers ship as part of its API (`Wiring.FEEDFORWARD`,
 `Wiring.SELF`) rather than living only in tests — the claim is that the wiring is what
 produces the integration, and that is only checkable if the other wirings are reachable.
+
+`Rhythm` is the same module's second claim and its harder one. Add a `drive` and a wall
+appears: on a fixed coupling, integration and representation trade off monotonically and
+no value holds both — at full coupling the drive is not weak but *unreachable*, bit for
+bit. A rhythm meets the two demands at different times instead of the same one, and beats
+the control that matters (a fixed coupling at the rhythm's own time average). Two rules
+follow. Measure a rhythm over a WHOLE listen/integrate cycle — `Rhythm.macro_step`, which
+`substrate` defaults to — since half a cycle reports one phase's transition matrix and
+labels it the engine's. And keep `Rhythm()` bit-exact with the pre-rhythm engine, because
+every Phi already published was measured on it.
 
 `align.py` is the only module that changes with experience, and it earns that by
 measurement rather than ambition: dynamics alone cannot canonicalize, because the evidence
