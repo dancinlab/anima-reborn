@@ -64,6 +64,7 @@ __all__ = [
     "crystal_matrix",
     "crystal_phi",
     "estimate_matrix",
+    "estimate_state_matrix",
 ]
 
 TRIALS = 400
@@ -463,3 +464,35 @@ def recurrence_evidence(
         coarse=coupled_phi(wiring, trials=trials, with_complex=False, **kwargs),
         fine=coupled_phi(wiring, trials=trials * factor, with_complex=False, **kwargs),
     )
+
+
+def estimate_state_matrix(
+    n: int,
+    step: Callable[[int, random.Random], int],
+    *,
+    trials: int = TRIALS,
+    seed: int | None = None,
+) -> list[list[float]]:
+    """Measure a process's state-to-state transition matrix.
+
+    A different object from `estimate_matrix`, which records each unit's ON
+    frequency and assumes the units are conditionally independent. This counts
+    whole successor states, which is what `iit4.ei` needs — the two lanes take
+    different inputs and are not views of one thing.
+
+    Rows sum to one by construction.
+    """
+    if not 1 <= n <= MAX_UNITS:
+        raise ValueError(f"n must be in [1, {MAX_UNITS}], got {n}")
+    if trials < 1:
+        raise ValueError(f"trials must be >= 1, got {trials}")
+
+    rng = random.Random(seed)
+    states = 1 << n
+    matrix = []
+    for state in range(states):
+        counts = [0] * states
+        for _ in range(trials):
+            counts[step(state, rng)] += 1
+        matrix.append([count / trials for count in counts])
+    return matrix

@@ -6,7 +6,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-none-success">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-302%20passing-success">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-309%20passing-success">
   <img alt="Origin" src="https://img.shields.io/badge/origin-dancinlab%2Fanima--experience-blueviolet">
 </p>
 
@@ -245,6 +245,29 @@ print(big_phi(alone,   0b11))   # big-phi=0.000000 ... [reducible]    환원 가
 Φ, 구조 총합, 두 φ 합, 구별 개수까지 **전부 비트단위 동일**. Φ 는 분할에 대한 argmax(최댓값
 위치)라서 마지막 비트 하나가 달라지면 다른 분할이 선택되어 답이 불연속적으로 튑니다. 허용오차를
 두면 바로 그 어긋남을 가려 버립니다.
+
+### ⚠ EI 는 Φ 의 하한이 아니다 — 물려받은 주장을 반증함
+
+hexa 원본은 `ei.py`(실효정보)를 **"Φ 의 보수적 하한 (참 Φ ≥ EI)"** 이라고 설명합니다. 6유닛을
+넘는 확장의 정찰병으로 쓰자는 제안이 여기서 나오는데, 재보니 **틀렸습니다**:
+
+| 배선 | EI (비트) | 방향성 Φ | EI ≤ Φ ? |
+| --- | ---: | ---: | --- |
+| 고리 (닫힌 순환) | 2.153 | 10.225 | 예 |
+| 전방향 (되먹임 0) | 1.867 | **0.000** | ❌ |
+| 자기참조 (결합 0) | 1.523 | 0.046 | ❌ |
+| 분리된 두 쌍 | 1.474 | 0.055 | ❌ |
+
+4개 중 3개에서 하한이 깨집니다. 정찰병으로는 더 나쁩니다 — **결합이 전혀 없는** 계가 완전히
+통합된 고리의 **70%** 를 찍고, EI 전체 변동폭이 2배 미만인데 Φ 는 200배 넘게 벌어집니다.
+
+**둘은 다른 것을 잽니다.** EI 는 "한 상태가 자기 미래를 얼마나 날카롭게 특정하는가" = **결정성**
+이고, 서로 독립인 결정적 유닛들은 결정성이 넘칩니다. Φ 는 "잘랐을 때 무엇이 파괴되는가"이고,
+독립 유닛들은 그게 0입니다. **완벽히 예측 가능하면서 완전히 분해된 계**가 가능하며, 그럴 때
+EI 는 높고 Φ 는 0입니다.
+
+그래서 **6유닛 초과 확장은 여전히 뒷받침할 측정이 없습니다.** 막다른 길을 만난 게 아니라,
+막다른 길인 줄 모르고 그 위에 확장을 세우는 걸 피한 것입니다.
 
 **물려받았고 닫지 않은 미완성 부분.** 분할은 메커니즘·구역의 전체 이분할 방식이고 IIT 4.0
 고유의 분할 집합이 아닙니다. big-Φ 는 계 절단이 파괴한 구조량이지, 분할된 행렬 위에서 다시
@@ -559,7 +582,7 @@ src/anima_reborn/
 ├─ substrate.py   다리: 우리 엔진 → 측정된 전이행렬 → Φ
 ├─ words.py       단어를 구동력으로 — 귀무대조가 항상 따라붙는다
 └─ viewer/        브라우저 뷰어 — 이 패키지의 유일한 입출력
-tests/            302개, 네트워크 없음, 픽스처 없음
+tests/            309개, 네트워크 없음, 픽스처 없음
 state/            작업 산출물 — 위임 설계 보고서 · 측정 기록 · 재현 스크립트
 ```
 

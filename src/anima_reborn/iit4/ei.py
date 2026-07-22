@@ -1,10 +1,35 @@
 """Effective information — a cheap, conservative floor under Phi.
 
 Full big-Phi searches every mechanism, purview and partition, which is why it
-stops being computable somewhere around six units. Effective information is the
-consolation prize: one pass over the transition matrix, and the answer is a
-*lower bound*. True Phi is never smaller than EI, so a positive EI is real
-evidence of integration even when Phi itself is out of reach.
+stops being computable somewhere around six units. Effective information is one
+pass over the transition matrix instead, and the hexa origin describes it as a
+conservative *lower bound* — "true Phi is never smaller than EI", so a positive
+EI would be evidence of integration even where Phi is out of reach.
+
+**That claim is false, and this package measured it false.** EI is not a bound
+on Phi and cannot stand in for it. Measured on four-unit systems that differ
+only in wiring, at 12800 trials:
+
+    wiring                    EI (bits)    directed Phi
+    ring (closed cycle)           2.153          10.225
+    feedforward (no return)       1.867           0.000
+    self-wired (no coupling)      1.523           0.046
+    two disconnected pairs        1.474           0.055
+
+EI exceeds Phi in three of the four, so the bound does not hold. Worse for any
+thought of using it as a scout at larger sizes: a system with **no coupling
+whatsoever** reads 1.523 bits, seventy percent of the fully integrated ring.
+
+The reason is that the two measure different things. EI asks how sharply a state
+picks out its own future compared to the average future — that is determinism,
+and four independent deterministic units have plenty of it. Phi asks what
+survives cutting the system apart, and four independent units have none of that.
+A system can be perfectly predictable and completely disintegrated; EI is high
+for it and Phi is zero.
+
+So what EI is good for here is narrow and worth stating: a cheap readout of how
+determined a substrate is, on its own terms. It is **not** a proxy for
+integration, and scaling past six units still has no measure behind it.
 
 For each state, compare where the system goes from there against where it goes
 on average:

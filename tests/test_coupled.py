@@ -14,6 +14,7 @@ created, and created is all this measures*.
 from __future__ import annotations
 
 import math
+import random
 import statistics
 
 import pytest
@@ -27,10 +28,14 @@ from anima_reborn.coupled import (
     CoupledEngine,
     Wiring,
 )
+from anima_reborn.iit4 import directed_big_phi
+from anima_reborn.iit4.ei import average_effective_information
 from anima_reborn.pipeline import PULL
 from anima_reborn.substrate import (
     RECURRENCE_FLOOR,
     coupled_phi,
+    estimate_matrix,
+    estimate_state_matrix,
     recurrence_evidence,
 )
 
@@ -269,3 +274,84 @@ class TestValidation:
     def test_the_units_are_named(self) -> None:
         assert NAMES == ("a0", "a1", "g0", "g1")
         assert len(NAMES) == UNITS
+
+
+class TestEffectiveInformationIsNotAProxy:
+    """Why scaling past six units still has no measure behind it.
+
+    The hexa origin calls EI a conservative lower bound on Phi — "true Phi is
+    never smaller than EI" — which would make it the obvious scout for systems
+    too large to measure exactly. It is not a bound, and it is not a scout.
+
+    Kept as tests rather than a note because the temptation is structural: EI is
+    cheap, it exists, and it is sitting right there in the package.
+    """
+
+    @staticmethod
+    def measure(wiring: Wiring, *, trials: int = 6400, seed: int = 0):
+        def step(state: int, rng: random.Random) -> int:
+            engine = CoupledEngine(
+                wiring=wiring,
+                seed=rng.getrandbits(63),
+                initial=tuple(
+                    AMPLITUDE if state >> i & 1 else -AMPLITUDE for i in range(UNITS)
+                ),
+            )
+            return engine.run(MACRO_STEP).pattern
+
+        ei = average_effective_information(
+            estimate_state_matrix(UNITS, step, trials=trials, seed=seed), bits=True
+        )
+        phi = directed_big_phi(
+            estimate_matrix(UNITS, step, trials=trials, seed=seed), 0b0101
+        ).phi
+        return ei, phi
+
+    def test_ei_is_not_a_lower_bound_on_phi(self) -> None:
+        """The inherited claim, refuted. On a feedforward chain Phi is exactly
+        zero and EI is nearly two bits."""
+        ei, phi = self.measure(Wiring.FEEDFORWARD)
+        assert phi == 0.0
+        assert ei > 1.0, ei
+
+    def test_a_system_with_no_coupling_still_scores_high_ei(self) -> None:
+        """The reason it cannot scout. Four units reading only themselves have
+        no integration at all and still read most of what the ring does."""
+        null_ei, null_phi = self.measure(Wiring.SELF)
+        ring_ei, ring_phi = self.measure(Wiring.RING)
+
+        assert null_phi < 0.5
+        assert ring_phi > 5.0
+        assert null_ei > ring_ei / 2, (null_ei, ring_ei)
+
+    def test_phi_separates_what_ei_cannot(self) -> None:
+        """Same three systems, two measures. One tells them apart."""
+        readings = {w: self.measure(w) for w in Wiring}
+        eis = [ei for ei, _ in readings.values()]
+        phis = [phi for _, phi in readings.values()]
+        assert max(eis) / max(min(eis), 1e-9) < 2, eis
+        assert max(phis) / max(min(phis), 1e-9) > 20, phis
+
+
+class TestStateMatrixEstimator:
+    def test_rows_are_distributions(self) -> None:
+        matrix = estimate_state_matrix(2, lambda s, r: (s + 1) % 4, trials=50, seed=1)
+        for row in matrix:
+            assert sum(row) == pytest.approx(1.0)
+
+    def test_it_recovers_a_deterministic_cycle(self) -> None:
+        matrix = estimate_state_matrix(2, lambda s, r: (s + 1) % 4, trials=20, seed=1)
+        assert [row.index(max(row)) for row in matrix] == [1, 2, 3, 0]
+
+    def test_it_is_a_different_object_from_the_node_matrix(self) -> None:
+        """State-to-state is square in the state count; state-by-node is not.
+        Confusing them is why `ei` documents its input shape so loudly."""
+        step = lambda s, r: (s + 1) % 4  # noqa: E731 @root-cause-ok tiny test fixture
+        square = estimate_state_matrix(2, step, trials=20, seed=1)
+        by_node = estimate_matrix(2, step, trials=20, seed=1)
+        assert len(square) == 4 and len(square[0]) == 4
+        assert len(by_node.values) == 4 * 2
+
+    def test_configuration_is_validated(self) -> None:
+        with pytest.raises(ValueError, match="trials must be >= 1"):
+            estimate_state_matrix(2, lambda s, r: s, trials=0)
