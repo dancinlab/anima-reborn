@@ -1,9 +1,18 @@
 """The viewer's HTTP server — stdlib only, one engine of each kind.
 
-The browser drives every engine by polling: each request carries the current
-control values, asks for a few ticks, and gets back the state to draw. Holding
-the engines here rather than in the page is the whole point — the picture is of
-the Python port's behaviour.
+Frames are **pushed**, not polled. Each engine has a ticker thread that steps it
+at the origin's own rate — 60 Hz for emergence, 30 Hz for the repulsion field
+and the pipeline, 20 Hz for the crystal — and publishes each new state to
+whoever is subscribed over a single long-lived `text/event-stream` connection.
+The page opens one stream, receives frames as fast as the engine produces them,
+and draws on the display's own refresh.
+
+Pulling instead would cap the frame rate at the poll interval and pay a request
+round trip per frame; the engines cost 0.02-0.23 ms per tick, so that cap was
+the only thing standing between this viewer and the origin's 60 fps.
+
+A ticker runs only while at least one viewer is watching it, which is the same
+thing the origin's page did by skipping inactive tabs.
 
 One instance of each engine is shared by every connected browser, so two tabs
 watch the same run rather than two diverging ones. A lock guards each engine,
@@ -15,6 +24,7 @@ from __future__ import annotations
 import json
 import socket
 import threading
+import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -31,8 +41,21 @@ __all__ = ["Viewer", "serve"]
 PAGE = Path(__file__).parent / "page.html"
 
 MAX_STEPS_PER_REQUEST = 240
-"""A slow client that stops polling for a while must not be able to ask for a
-hundred thousand ticks in one request when it comes back."""
+"""Cap on the `steps` of a one-shot `/api/<engine>` request. The streaming path
+does not use it — a ticker's rate is fixed by the server, not by the client."""
+
+TICK_RATES = {
+    "emergence": 60.0,
+    "crystal": 20.0,
+    "repulsion": 30.0,
+    "pipeline": 30.0,
+}
+"""Ticks per second, carried from the origin's `setInterval` periods so the
+engines run at the speed their thresholds were chosen against."""
+
+PING_SECONDS = 10.0
+"""How long a stream waits for a frame before sending a keep-alive comment. A
+paused engine must still notice that its viewer has gone away."""
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -45,47 +68,6 @@ class _Guarded:
 
     engine: Any
     lock: threading.Lock
-
-
-class Viewer:
-    """Holds one of each engine and answers the page's polls."""
-
-    def __init__(self, *, seed: int | None = None) -> None:
-        self._engines = {
-            "emergence": _Guarded(EmergenceEngine(coupling=0.5, seed=seed), threading.Lock()),
-            "crystal": _Guarded(TimeCrystal(epsilon=0.05, seed=seed), threading.Lock()),
-            "repulsion": _Guarded(RepulsionField(seed=seed), threading.Lock()),
-            "pipeline": _Guarded(Pipeline(seed=seed), threading.Lock()),
-        }
-
-    def names(self) -> tuple[str, ...]:
-        return tuple(self._engines)
-
-    def engine(self, name: str) -> Any:
-        """The live engine behind one route.
-
-        Handed out so the viewer can be embedded and inspected. Stepping it
-        from outside races the page's polls — read it, or take the lock.
-        """
-        return self._engines[name].engine
-
-    def reset(self, name: str) -> dict[str, Any]:
-        guarded = self._engines[name]
-        with guarded.lock:
-            guarded.engine.reset()
-        return {"reset": name}
-
-    def advance(self, name: str, params: dict[str, list[str]]) -> dict[str, Any]:
-        """Apply the page's controls, step the engine, and describe it."""
-        guarded = self._engines[name]
-        steps = int(_clamp(_number(params, "steps", 1.0), 1, MAX_STEPS_PER_REQUEST))
-        with guarded.lock:
-            engine = guarded.engine
-            handler = _HANDLERS[name]
-            handler.configure(engine, params)
-            for _ in range(steps):
-                engine.step()
-            return handler.describe(engine)
 
 
 def _number(params: dict[str, list[str]], key: str, default: float) -> float:
@@ -157,7 +139,7 @@ class _RepulsionHandler:
     @staticmethod
     def describe(engine: RepulsionField) -> dict[str, Any]:
         state = engine.state
-        if state is None:  # unreachable — `advance` always steps at least once
+        if state is None:  # unreachable — a frame is only cut after a step
             raise ValueError("repulsion field has not been stepped")
         return {
             "a": _round(engine.a),
@@ -171,7 +153,7 @@ class _RepulsionHandler:
             "curiosity": state.curiosity,
             "authenticity": state.authenticity,
             "mood": state.mood.value,
-            "noise": engine.noise,
+            "ticks": engine.ticks,
         }
 
 
@@ -195,6 +177,7 @@ class _PipelineHandler:
             "h_joint": state.h_joint,
             "mi": state.mutual_information,
             "verdict": state.verdict.value,
+            "ticks": engine.ticks,
         }
 
 
@@ -206,8 +189,174 @@ _HANDLERS: dict[str, Any] = {
 }
 
 
+class _Ticker:
+    """Steps one engine on its own thread and publishes each frame.
+
+    Runs only while someone is subscribed. Subscribers wait on a condition
+    rather than polling, so a frame reaches the browser as soon as it exists.
+    """
+
+    def __init__(self, guarded: _Guarded, handler: Any, rate: float) -> None:
+        self._guarded = guarded
+        self._handler = handler
+        self._interval = 1.0 / rate
+        self._condition = threading.Condition()
+        self._frame: dict[str, Any] | None = None
+        self._sequence = 0
+        self._watchers = 0
+        self._running = False
+        self._generation = 0
+        self._controls: dict[str, list[str]] = {}
+
+    @property
+    def rate(self) -> float:
+        return 1.0 / self._interval
+
+    @property
+    def watchers(self) -> int:
+        with self._condition:
+            return self._watchers
+
+    def control(self, params: dict[str, list[str]]) -> None:
+        """Take the page's slider values. They are applied by the ticker before
+        its next step rather than here, so control never races a step."""
+        with self._condition:
+            self._controls = params
+
+    def subscribe(self) -> int:
+        """Register a watcher and return the sequence number it has seen, so
+        the first frame it receives is one it has not."""
+        with self._condition:
+            self._watchers += 1
+            if not self._running:
+                self._running = True
+                # A new generation. The previous thread may still be inside its
+                # sleep; when it wakes it will see a generation that is not its
+                # own and retire, so a fast unsubscribe/subscribe — switching
+                # tabs quickly — cannot leave two threads stepping one engine
+                # at twice its rate.
+                self._generation += 1
+                threading.Thread(
+                    target=self._run, args=(self._generation,), daemon=True
+                ).start()
+            return self._sequence
+
+    def unsubscribe(self) -> None:
+        with self._condition:
+            self._watchers -= 1
+            if self._watchers <= 0:
+                self._watchers = 0
+                self._running = False
+                self._condition.notify_all()
+
+    def wait(self, seen: int, timeout: float) -> tuple[int, dict[str, Any] | None]:
+        """Block until a frame newer than `seen` exists, or the timeout expires.
+
+        Returns the unchanged sequence number on timeout, which the caller uses
+        as its cue to send a keep-alive.
+        """
+        with self._condition:
+            self._condition.wait_for(lambda: self._sequence != seen, timeout)
+            return self._sequence, self._frame
+
+    def _run(self, generation: int) -> None:
+        due = time.monotonic()
+        while True:
+            with self._condition:
+                if not self._running or self._generation != generation:
+                    return
+                controls = self._controls
+
+            with self._guarded.lock:
+                engine = self._guarded.engine
+                self._handler.configure(engine, controls)
+                engine.step()
+                frame = self._handler.describe(engine)
+
+            with self._condition:
+                self._sequence += 1
+                self._frame = frame
+                self._condition.notify_all()
+
+            due += self._interval
+            delay = due - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            else:
+                # Fell behind — resync rather than sprint to catch up, which
+                # would show as a burst of frames at the wrong speed.
+                due = time.monotonic()
+
+
+class Viewer:
+    """Holds one of each engine, the ticker driving it, and its controls."""
+
+    def __init__(self, *, seed: int | None = None) -> None:
+        engines = {
+            "emergence": EmergenceEngine(coupling=0.5, seed=seed),
+            "crystal": TimeCrystal(epsilon=0.05, seed=seed),
+            "repulsion": RepulsionField(seed=seed),
+            "pipeline": Pipeline(seed=seed),
+        }
+        self._engines = {
+            name: _Guarded(engine, threading.Lock())
+            for name, engine in engines.items()
+        }
+        self._tickers = {
+            name: _Ticker(guarded, _HANDLERS[name], TICK_RATES[name])
+            for name, guarded in self._engines.items()
+        }
+
+    def names(self) -> tuple[str, ...]:
+        return tuple(self._engines)
+
+    def engine(self, name: str) -> Any:
+        """The live engine behind one route.
+
+        Handed out so the viewer can be embedded and inspected. Stepping it
+        from outside races the ticker — read it, or take the lock.
+        """
+        return self._engines[name].engine
+
+    def ticker(self, name: str) -> _Ticker:
+        """The ticker driving one engine."""
+        return self._tickers[name]
+
+    def control(self, name: str, params: dict[str, list[str]]) -> dict[str, Any]:
+        self._tickers[name].control(params)
+        return {"ok": True}
+
+    def reset(self, name: str) -> dict[str, Any]:
+        guarded = self._engines[name]
+        with guarded.lock:
+            guarded.engine.reset()
+        return {"reset": name}
+
+    def advance(self, name: str, params: dict[str, list[str]]) -> dict[str, Any]:
+        """Apply controls, step, and describe — the one-shot path.
+
+        The page streams instead; this stays for scripting the viewer from a
+        shell and for tests that want a frame without a socket.
+        """
+        guarded = self._engines[name]
+        steps = int(_clamp(_number(params, "steps", 1.0), 1, MAX_STEPS_PER_REQUEST))
+        with guarded.lock:
+            engine = guarded.engine
+            handler = _HANDLERS[name]
+            handler.configure(engine, params)
+            for _ in range(steps):
+                engine.step()
+            return handler.describe(engine)
+
+
 class _Handler(BaseHTTPRequestHandler):
     server_version = "anima-reborn-viewer"
+    protocol_version = "HTTP/1.1"
+    """Keep-alive. Under HTTP/1.0 every request paid a fresh TCP handshake,
+    which is most of the cost of a frame on anything but loopback. Every
+    non-streaming response below sends a Content-Length, which is what makes
+    connection reuse legal."""
+
     viewer: Viewer
 
     def do_GET(self) -> None:
@@ -219,10 +368,68 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/api/"):
-            self._send_api(path[len("/api/"):], parse_qs(url.query))
+            self._route(path[len("/api/"):], parse_qs(url.query))
             return
 
         self._send_json({"error": "not found"}, status=404)
+
+    def _route(self, route: str, params: dict[str, list[str]]) -> None:
+        name, _, verb = route.partition("/")
+        if name not in self.viewer.names():
+            self._send_json({"error": f"unknown engine: {name}"}, status=404)
+            return
+        try:
+            if verb == "stream":
+                self._stream(name, params)
+            elif verb == "control":
+                self._send_json(self.viewer.control(name, params))
+            elif verb == "reset":
+                self._send_json(self.viewer.reset(name))
+            elif verb == "":
+                self._send_json(self.viewer.advance(name, params))
+            else:
+                self._send_json({"error": f"unknown action: {verb}"}, status=404)
+        except (ValueError, KeyError) as exc:
+            self._send_json({"error": str(exc)}, status=400)
+
+    def _stream(self, name: str, params: dict[str, list[str]]) -> None:
+        """Push frames until the browser goes away.
+
+        The response has no length, so the connection cannot be reused; it is
+        held open for the life of the stream instead.
+        """
+        ticker = self.viewer.ticker(name)
+        if params:
+            ticker.control(params)
+
+        self.close_connection = True
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+        seen = ticker.subscribe()
+        try:
+            self._write(f"retry: 500\nevent: hello\ndata: {json.dumps({'rate': ticker.rate})}\n\n")
+            while True:
+                sequence, frame = ticker.wait(seen, PING_SECONDS)
+                if sequence == seen or frame is None:
+                    # Nothing new. The comment is what detects a browser that
+                    # closed without telling us.
+                    self._write(": ping\n\n")
+                    continue
+                seen = sequence
+                self._write(f"data: {json.dumps(frame)}\n\n")
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass  # the page navigated away; the finally clause is the cleanup
+        finally:
+            ticker.unsubscribe()
+
+    def _write(self, text: str) -> None:
+        self.wfile.write(text.encode())
+        self.wfile.flush()
 
     def _send_page(self) -> None:
         try:
@@ -237,21 +444,6 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_api(self, route: str, params: dict[str, list[str]]) -> None:
-        name, _, verb = route.partition("/")
-        if name not in self.viewer.names():
-            self._send_json({"error": f"unknown engine: {name}"}, status=404)
-            return
-        try:
-            if verb == "reset":
-                self._send_json(self.viewer.reset(name))
-            elif verb == "":
-                self._send_json(self.viewer.advance(name, params))
-            else:
-                self._send_json({"error": f"unknown action: {verb}"}, status=404)
-        except (ValueError, KeyError) as exc:
-            self._send_json({"error": str(exc)}, status=400)
-
     def _send_json(self, payload: dict[str, Any], status: int = 200) -> None:
         body = json.dumps(payload).encode()
         self.send_response(status)
@@ -262,13 +454,13 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             self.wfile.write(body)
         except BrokenPipeError:
-            # The page navigated away mid-poll. Nothing to recover, and it is
-            # not worth a stack trace in the log.
+            # The page navigated away mid-request. Nothing to recover, and it
+            # is not worth a stack trace in the log.
             pass
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        """Silence the per-request log — the page polls several times a second
-        and the noise buries the startup banner."""
+        """Silence the per-request log — a stream would otherwise log once per
+        frame and bury the startup banner."""
 
 
 def local_address() -> str:
@@ -313,6 +505,8 @@ def serve(
         banner.append(f"  network  http://{reachable}:{port}")
     if host == "0.0.0.0":
         banner.append("  bound to every interface — anyone on this network can reach it")
+    rates = " · ".join(f"{name} {int(hz)}Hz" for name, hz in TICK_RATES.items())
+    banner.append(f"  {rates}")
     banner.append("  ctrl-c to stop")
     # Flushed explicitly: stdout is block-buffered whenever it is redirected to
     # a file or a pipe, which is exactly when someone needs to read the address

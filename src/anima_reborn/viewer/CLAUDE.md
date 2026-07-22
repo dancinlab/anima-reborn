@@ -21,14 +21,39 @@ unverified implementation that will silently drift.
 ## Contract
 
 - `GET /` → `page.html`
-- `GET /api/<engine>?steps=N&<controls>` → apply the controls, step `N` times, return
-  the state as JSON
+- `GET /api/<engine>/stream?<controls>` → **the path the page uses.** One long-lived
+  `text/event-stream`; the engine's ticker pushes a frame per tick
+- `GET /api/<engine>/control?<controls>` → hand the ticker new slider values
 - `GET /api/<engine>/reset` → rewind that engine
+- `GET /api/<engine>?steps=N&<controls>` → one-shot: step `N` times and return a frame.
+  Kept for `curl` and for tests that want a frame without a socket
 
 Controls are clamped, never rejected: a stale query string must not push an engine
 outside the range it validates. Unparseable values fall back to the engine's current
-setting. `steps` is capped at `MAX_STEPS_PER_REQUEST` so a page that stopped polling
-cannot demand unbounded work when it returns.
+setting. `steps` is capped at `MAX_STEPS_PER_REQUEST` on the one-shot path; the stream
+has no such knob because its rate belongs to the server.
+
+## Why push rather than poll
+
+Polling capped the frame rate at the poll interval and paid a TCP handshake per frame
+(`BaseHTTPRequestHandler` defaults to HTTP/1.0). Measured: engines cost 0.02–0.23 ms per
+tick and a LAN round trip is 1.1 ms, so nothing but the poll loop stood between this
+viewer and the origin's 60 fps. `TICK_RATES` carries the origin's `setInterval` periods,
+so an engine runs at the speed its thresholds were chosen against.
+
+`protocol_version = "HTTP/1.1"` enables keep-alive, which is why every non-streaming
+response **must** send a `Content-Length`. The stream deliberately does not, and sets
+`Connection: close` instead.
+
+## Ticker threads
+
+`_Ticker` steps one engine and broadcasts frames to subscribers over a `Condition`. It
+runs only while watched. Restarting carries a **generation** number: a thread whose
+generation is stale retires, so a fast unsubscribe/subscribe — switching tabs quickly —
+cannot leave two threads stepping one engine. Without that guard, eight quick tab
+switches left nine threads running at 9× the intended rate;
+`tests/test_viewer.py::TestTicker::test_rapid_resubscribe_leaves_one_thread` fails
+loudly if the guard is removed.
 
 ## When adding an engine
 

@@ -6,7 +6,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-none-success">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-96%20passing-success">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-100%20passing-success">
   <img alt="Origin" src="https://img.shields.io/badge/origin-dancinlab%2Fanima--experience-blueviolet">
 </p>
 
@@ -39,13 +39,23 @@ anima-reborn viewer
   local    http://127.0.0.1:8420
   network  http://192.168.1.20:8420
   bound to every interface — anyone on this network can reach it
+  emergence 60Hz · crystal 20Hz · repulsion 30Hz · pipeline 30Hz
   ctrl-c to stop
 ```
 
 Four tabs, live sliders, and the same visuals as the origin — but every number and every
-plotted point comes from the Python engines over `/api/<engine>`. The page draws; it
-never simulates. That is what makes it evidence about the port rather than a second
-implementation.
+plotted point comes from the Python engines. The page draws; it never simulates. That is
+what makes it evidence about the port rather than a second implementation.
+
+Frames are **pushed**, not polled: each engine has a ticker thread running at the
+origin's own rate, and the page holds one `text/event-stream` connection and draws on
+the display's refresh. Measured over the network, that is 60.2 / 20.4 / 30.3 / 30.3 fps
+— the origin's rates, from Python. Polling had capped it at 10 fps and paid a TCP
+handshake per frame; the engines themselves cost 0.02–0.23 ms per tick, so the cap was
+never the simulation.
+
+A ticker runs only while someone is watching it, the same way the origin skipped
+inactive tabs.
 
 `--host 127.0.0.1` keeps it on this machine, `--port` moves it, `--seed` makes a
 demonstration repeat exactly. There is no authentication: it is a development viewer for
@@ -161,7 +171,7 @@ src/anima_reborn/
 ├─ repulsion.py   A × G latent field
 ├─ pipeline.py    repulsion → streams → emergence
 └─ viewer/        the browser view — the only I/O in the package
-tests/            96 tests, no network, no fixtures
+tests/            100 tests, no network, no fixtures
 ```
 
 Every engine is a class you step yourself, with `seed=` for reproducibility, `run(n)` to

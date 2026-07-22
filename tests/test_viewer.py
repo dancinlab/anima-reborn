@@ -8,6 +8,7 @@ the engines.
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
@@ -141,6 +142,64 @@ class TestSeeding:
         first = Viewer(seed=99).advance("emergence", params(steps=250))
         second = Viewer(seed=99).advance("emergence", params(steps=250))
         assert first == second
+
+
+class TestTicker:
+    def test_a_ticker_runs_only_while_watched(self) -> None:
+        viewer = Viewer(seed=20)
+        ticker = viewer.ticker("emergence")
+        assert ticker.watchers == 0
+
+        ticker.subscribe()
+        assert ticker.watchers == 1
+        sequence, _ = ticker.wait(0, timeout=2.0)
+        assert sequence > 0, "a subscribed ticker must produce frames"
+
+        ticker.unsubscribe()
+        assert ticker.watchers == 0
+        settled = viewer.engine("emergence").ticks
+        time.sleep(0.2)
+        assert viewer.engine("emergence").ticks == settled, "an unwatched ticker must stop"
+
+    def test_rapid_resubscribe_leaves_one_thread(self) -> None:
+        """Switching tabs quickly must not leave the previous ticker thread
+        alive alongside the new one — two threads would step a single engine at
+        twice its rate."""
+        viewer = Viewer(seed=21)
+        ticker = viewer.ticker("emergence")
+        for _ in range(8):
+            ticker.subscribe()
+            ticker.unsubscribe()
+
+        ticker.subscribe()
+        try:
+            ticker.wait(0, timeout=2.0)
+            before = viewer.engine("emergence").ticks
+            time.sleep(0.5)
+            elapsed = viewer.engine("emergence").ticks - before
+        finally:
+            ticker.unsubscribe()
+
+        # 60 Hz for half a second is ~30 ticks. Two threads would roughly
+        # double it, so the ceiling is what this test is really asserting.
+        assert 10 < elapsed < 55, elapsed
+
+    def test_controls_reach_a_running_ticker(self) -> None:
+        viewer = Viewer(seed=22)
+        viewer.control("emergence", params(coupling=1.0))
+        ticker = viewer.ticker("emergence")
+        ticker.subscribe()
+        try:
+            ticker.wait(0, timeout=2.0)
+        finally:
+            ticker.unsubscribe()
+        assert viewer.engine("emergence").coupling == 1.0
+
+    def test_every_engine_ticks_at_the_origins_rate(self) -> None:
+        rates = {"emergence": 60.0, "crystal": 20.0, "repulsion": 30.0, "pipeline": 30.0}
+        viewer = Viewer(seed=23)
+        for name, expected in rates.items():
+            assert viewer.ticker(name).rate == expected
 
 
 def test_local_address_is_an_address() -> None:

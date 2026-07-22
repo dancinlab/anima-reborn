@@ -30,6 +30,11 @@
   h1 { margin: 0 0 4px; font-size: 21px; letter-spacing: -0.2px; }
   .sub { color: var(--dim); font-size: 13px; }
   .sub code { color: var(--accent); }
+  .fps {
+    margin-top: 9px; display: inline-block; padding: 3px 10px; border-radius: 6px;
+    background: var(--panel); border: 1px solid var(--line);
+    color: var(--dim); font-size: 11.5px; font-variant-numeric: tabular-nums;
+  }
 
   nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 18px; }
   .tab {
@@ -92,8 +97,9 @@
   <h1>🌱 anima-reborn — engine viewer</h1>
   <div class="sub">
     Every number and every pixel below comes from the Python engines in
-    <code>src/anima_reborn/</code>. The page only draws.
+    <code>src/anima_reborn/</code>, pushed frame by frame. The page only draws.
   </div>
+  <div class="fps" id="fps">connecting…</div>
 </header>
 
 <nav>
@@ -445,12 +451,18 @@ function setBadge(el, text, cls) {
   el.className = "badge" + (cls ? " " + cls : "");
 }
 
-// ── polling ────────────────────────────────────────────────────────────────
-const POLL_MS = 100;
-let active = "emergence";
-let inFlight = false;
+// ── streaming ──────────────────────────────────────────────────────────────
+// The server pushes a frame per engine tick over one long-lived connection.
+// Frames are stashed, not drawn on arrival; drawing happens on the display's
+// own refresh, so a burst of frames costs one repaint rather than several.
+const PREFIX = { emergence: "em", crystal: "cr", repulsion: "rp", pipeline: "pl" };
 
-const STEPS = { emergence: 6, crystal: 2, repulsion: 3, pipeline: 3 };
+let active = "emergence";
+let stream = null;
+let pending = null;          // newest frame not yet drawn
+let received = 0;            // frames since the last rate sample
+let drawn = 0;
+let engineRate = 0;
 
 function controlsFor(name) {
   if (name === "emergence") return { coupling: $("em-coupling").value / 100 };
@@ -459,23 +471,51 @@ function controlsFor(name) {
   return { separation: $("pl-sep").value / 100 };
 }
 
-async function poll() {
-  if (inFlight) return;
-  inFlight = true;
-  const name = active;
-  const params = new URLSearchParams({ steps: STEPS[name], ...controlsFor(name) });
-  try {
-    const response = await fetch(`/api/${name}?${params}`);
-    if (!response.ok) throw new Error(`server said ${response.status}`);
-    render(name, await response.json());
-  } catch (error) {
-    const status = $(({ emergence: "em", crystal: "cr", repulsion: "rp", pipeline: "pl" })[name] + "-status");
+function connect(name) {
+  if (stream) stream.close();
+  pending = null;
+  received = drawn = 0;
+
+  const params = new URLSearchParams(controlsFor(name));
+  stream = new EventSource(`/api/${name}/stream?${params}`);
+
+  stream.addEventListener("hello", event => {
+    engineRate = JSON.parse(event.data).rate;
+  });
+  stream.onmessage = event => {
+    pending = JSON.parse(event.data);
+    received++;
+    const status = $(PREFIX[name] + "-status");
+    if (status.classList.contains("err")) status.className = "status";
+  };
+  stream.onerror = () => {
+    const status = $(PREFIX[name] + "-status");
     status.className = "status err";
-    status.textContent = "engine unreachable — " + error.message;
-  } finally {
-    inFlight = false;
-  }
+    status.textContent = "stream interrupted — reconnecting…";
+  };
 }
+
+function pushControls(name) {
+  const params = new URLSearchParams(controlsFor(name));
+  fetch(`/api/${name}/control?${params}`).catch(() => {});
+}
+
+// ── draw loop ──────────────────────────────────────────────────────────────
+function frame() {
+  if (pending) {
+    render(active, pending);
+    pending = null;
+    drawn++;
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+setInterval(() => {
+  $("fps").textContent = `${received} fps in · ${drawn} drawn` +
+    (engineRate ? ` · engine ${Math.round(engineRate)} Hz` : "");
+  received = drawn = 0;
+}, 1000);
 
 function render(name, data) {
   if (name === "emergence") renderEmergence(data);
@@ -555,36 +595,51 @@ function renderPipeline(d) {
 // ── wiring ─────────────────────────────────────────────────────────────────
 for (const tab of document.querySelectorAll(".tab")) {
   tab.addEventListener("click", () => {
+    if (tab.dataset.tab === active) return;
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t === tab));
     active = tab.dataset.tab;
     document.querySelectorAll(".panel").forEach(p => {
       p.classList.toggle("active", p.id === "p-" + active);
     });
+    // One stream at a time: the engine behind a hidden tab stops ticking, the
+    // same way the origin skipped inactive tabs.
+    connect(active);
   });
 }
 
 const SLIDERS = [
-  ["em-coupling", "em-coupling-v", 100],
-  ["cr-eps", "cr-eps-v", 100],
-  ["rp-sep", "rp-sep-v", 100],
-  ["rp-noise", "rp-noise-v", 100],
-  ["pl-sep", "pl-sep-v", 100],
+  ["em-coupling", "em-coupling-v", "emergence"],
+  ["cr-eps", "cr-eps-v", "crystal"],
+  ["rp-sep", "rp-sep-v", "repulsion"],
+  ["rp-noise", "rp-noise-v", "repulsion"],
+  ["pl-sep", "pl-sep-v", "pipeline"],
 ];
-for (const [input, output, divisor] of SLIDERS) {
+for (const [input, output, engine] of SLIDERS) {
   const el = $(input), out = $(output);
-  const sync = () => { out.textContent = (el.value / divisor).toFixed(2); };
-  el.addEventListener("input", sync);
-  sync();
+  el.addEventListener("input", () => {
+    out.textContent = (el.value / 100).toFixed(2);
+    pushControls(engine);
+  });
+  out.textContent = (el.value / 100).toFixed(2);
 }
 
 for (const button of document.querySelectorAll("[data-reset]")) {
-  button.addEventListener("click", async () => {
-    await fetch(`/api/${button.dataset.reset}/reset`);
+  button.addEventListener("click", () => {
+    fetch(`/api/${button.dataset.reset}/reset`).catch(() => {});
   });
 }
 
-setInterval(poll, POLL_MS);
-poll();
+// A backgrounded tab gets no animation frames, so frames would pile up in the
+// browser's buffer. Drop the stream while hidden and pick it back up on return.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    if (stream) { stream.close(); stream = null; }
+  } else {
+    connect(active);
+  }
+});
+
+connect(active);
 </script>
 </body>
 </html>
