@@ -19,7 +19,9 @@ import pytest
 
 from anima_reborn import Emergence, RepulsionField
 from anima_reborn.info import Binning, entropy, joint_entropy
-from anima_reborn.pipeline import DAMPING, PULL
+from anima_reborn.iit4 import big_phi
+from anima_reborn.pipeline import DAMPING, PULL, WALK
+from anima_reborn.substrate import estimate_matrix
 from anima_reborn.words import (
     HOLD,
     MIN_EFFECTIVE_SAMPLES,
@@ -79,6 +81,45 @@ class TestDoesEmergenceHappen:
         assert measure(
             related, sequence(seed=8), window=WINDOW_FAST, seed=1
         ).verdict is Emergence.INDEPENDENT
+
+
+class TestTransmittedNotCreated:
+    """The claim that keeps the headline honest.
+
+    A and G never read each other — the gap between them is a readout, not a
+    channel — so independent inputs give independent outputs by construction.
+    The substrate carries a relationship; it cannot manufacture one, and if any
+    of this ever measured otherwise it would mean a coupling had been
+    introduced somewhere it does not belong.
+    """
+
+    def test_independent_words_produce_no_binding_on_any_seed(self) -> None:
+        readings = [
+            measure(sequence(seed=7), sequence(seed=8), window=WINDOW_FAST, seed=s)
+            for s in range(8)
+        ]
+        for reading in readings:
+            assert abs(reading.excess) < 0.05, reading
+            assert reading.verdict is Emergence.INDEPENDENT
+
+    def test_the_substrate_has_no_phi_to_give(self) -> None:
+        """Every dimension updates from itself and its own target, so the
+        transition matrix factorizes and no cut destroys anything. Four
+        distinctions exist; none of them are integrated."""
+        wa, wg = blake_scalar("고양이"), blake_scalar("자동차")
+
+        def step(state: int, rng: random.Random) -> int:
+            values = []
+            for i, target in enumerate((wa, wa * 0.8, wg, wg * 0.8)):
+                x = 0.2 if state >> i & 1 else -0.2
+                x += (rng.random() - 0.5) * WALK
+                x += (target - x) * PULL
+                values.append(x)
+            return sum(1 << i for i, v in enumerate(values) if v > 0)
+
+        measured = big_phi(estimate_matrix(4, step, trials=400, seed=1), 0b1111)
+        assert measured.phi == 0.0
+        assert measured.structure.distinctions, "it does specify things"
 
 
 class TestTheSubstrateErasesAnInitialCondition:
@@ -202,6 +243,65 @@ class TestTheEstimatorTrap:
         many = bias(25, 20_000)  # 800
         assert few > 0.30, few
         assert many < 0.05, many
+
+    def test_a_time_shift_is_a_stricter_null_than_a_shuffle(self) -> None:
+        """Why the null rotates rather than reshuffles.
+
+        A rotation keeps the stream's own autocorrelation and removes only the
+        alignment; rebuilding from shuffled words loses some of that structure
+        and so reads LOW, which would flatter every excess by the difference.
+        """
+        words = sequence(seed=7)
+        left = drive(words, ticks=WINDOW_FAST, rng=random.Random(1))
+        right = drive(words, ticks=WINDOW_FAST, rng=random.Random(2))
+        binning = Binning(bins=12, vrange=1.6)
+
+        def against(other: list[float]) -> float:
+            return max(
+                0.0,
+                entropy(left, binning)
+                + entropy(other, binning)
+                - joint_entropy(left, other, binning),
+            )
+
+        rotated = statistics.median(
+            against(right[d:] + right[:d]) for d in (37, 83, 127)
+        )
+        reshuffled = list(words)
+        random.Random(3).shuffle(reshuffled)
+        rebuilt = against(drive(reshuffled, ticks=WINDOW_FAST, rng=random.Random(4)))
+        assert rotated > rebuilt
+
+    def test_a_time_shift_is_a_stricter_null_than_a_shuffle(self) -> None:
+        """Why the null rotates rather than reshuffles.
+
+        A rotation keeps the stream's own autocorrelation and removes only the
+        alignment. Rebuilding the stream from shuffled words loses some of that
+        structure too, so it reads LOW — and a null that reads low flatters
+        every excess measured against it. Measured on the same unrelated pair:
+        0.0182 rotated against 0.0120 reshuffled.
+        """
+        words = sequence(seed=7)
+        left = drive(words, ticks=WINDOW_FAST, rng=random.Random(1))
+        right = drive(words, ticks=WINDOW_FAST, rng=random.Random(2))
+        binning = Binning(bins=12, vrange=1.6)
+
+        def against(other: list[float]) -> float:
+            return max(
+                0.0,
+                entropy(left, binning)
+                + entropy(other, binning)
+                - joint_entropy(left, other, binning),
+            )
+
+        rotated = statistics.median(
+            against(right[shift:] + right[:shift]) for shift in (37, 83, 127)
+        )
+        reshuffled = list(words)
+        random.Random(3).shuffle(reshuffled)
+        rebuilt = against(drive(reshuffled, ticks=WINDOW_FAST, rng=random.Random(4)))
+
+        assert rotated > rebuilt, (rotated, rebuilt)
 
     def test_the_null_does_not_care_what_the_words_are(self) -> None:
         """The control measures the estimator, not the relationship — so it

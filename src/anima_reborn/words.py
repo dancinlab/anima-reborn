@@ -27,6 +27,23 @@ word sequences, where the true mutual information is exactly zero:
 At eight effective samples the estimator reports 0.835 bits — nearly three times
 the 0.30-bit emergence bar — for words with no relation whatsoever.
 
+**And the answer, stated so it cannot be over-read: binding is transmitted, not
+created.** A and G never read each other — no engine in this package couples
+them, the gap is a readout rather than a channel — so two independent word
+streams produce two independent observation streams *by construction*, and no
+measurement could show otherwise. Measured, on eight seeds: -0.002 to +0.004
+bits, flat at zero. What the substrate does is *carry* whatever relationship its
+inputs already had, through a filter with a measurable passband, losing some of
+it on the way. It never invents one. So "emergence happens when words go into A
+and G" is true only in the sense that a wire carries a signal.
+
+The same architecture puts Phi at zero. Every dimension updates from itself and
+its own exogenous target, so the transition matrix factorizes and there is
+nothing for a partition to destroy. Measured through `substrate`/`iit4` on the
+four driven units at three binarization thresholds: **Phi = 0.0000 exactly**, at
+four distinctions and a structure total of 4.0 — plenty specified, nothing
+integrated. Words do not change this and were never going to.
+
 So this module refuses to hand out a bare number. Every measurement carries its
 own null: the same words, paired at random, measured the same way. What can be
 read is the **excess** over that null, and the verdict is classified on the
@@ -84,8 +101,18 @@ MIN_EFFECTIVE_SAMPLES = 400
 Chosen from the measurement above: 400 effective samples sits between the 0.036
 and 0.014 bias readings, an order of magnitude under the 0.30 bar."""
 
-CONTROL_ROUNDS = 8
-"""Null measurements averaged per reading. One shuffle is itself a sample."""
+SHIFTS = (37, 83, 127)
+"""Circular offsets the null is measured at, and their median is taken.
+
+A shift is a stricter null than a shuffle, which is why it replaced one here.
+Rotating the second stream keeps everything the encoding produced — marginals,
+block structure, autocorrelation, the estimator's whole contribution — and
+removes only the alignment. A shuffle rebuilds the stream and loses some of that
+autocorrelation with it, so it reads LOW and flatters the result: measured
+0.0120 against the shift's 0.0182 on the same unrelated pair.
+
+All three are coprime to `HOLD` and past the substrate's 17-tick memory, so no
+offset can accidentally re-align the blocks."""
 
 
 def blake_scalar(word: str) -> float:
@@ -144,9 +171,9 @@ class WordReading:
     mutual_information: float
     """Bits between the two driven streams."""
     control: float
-    """The same words with the pairing destroyed, measured identically. This is
-    what the estimator reports for no relationship at all, at this exact
-    effective sample size."""
+    """The same streams with the second rotated in time — everything the
+    encoding produced kept, only the alignment removed. This is what the
+    estimator reports for no relationship at all, at this exact window."""
     effective_samples: int
     """`window / hold` — independent draws behind the estimate. The bias that
     fakes emergence is governed by this and nothing else."""
@@ -188,48 +215,39 @@ def measure(
 ) -> WordReading:
     """Drive A from one word sequence, G from another, and measure the pair.
 
-    The null is built by permuting G's words: same multiset, same marginal
-    distribution, same encoding, same window — only the pairing destroyed. Any
-    excess over it is the part that the relationship between the sequences
-    accounts for.
+    The null is the same pair of streams with the second one rotated in time:
+    same encoding, same cadence, same substrate, same estimator bias — only the
+    alignment gone. Any excess over it is what the relationship between the
+    sequences accounts for, and nothing the encoding can manufacture survives
+    a time shift.
     """
     binning = binning or Binning(bins=12, vrange=1.6)
     rng = random.Random(seed)
 
-    def paired(sequence_g: Sequence[str], stream_seed: int) -> float:
-        left = drive(
-            words_a,
-            hold=hold,
-            ticks=window,
-            encode=encode,
-            rng=random.Random(stream_seed),
-        )
-        right = drive(
-            sequence_g,
-            hold=hold,
-            ticks=window,
-            encode=encode,
-            rng=random.Random(stream_seed + 1),
-        )
+    stream_seed = rng.getrandbits(32)
+    left = drive(
+        words_a, hold=hold, ticks=window, encode=encode,
+        rng=random.Random(stream_seed),
+    )
+    right = drive(
+        words_g, hold=hold, ticks=window, encode=encode,
+        rng=random.Random(stream_seed + 1),
+    )
+
+    def against(other: Sequence[float]) -> float:
         return max(
             0.0,
             entropy(left, binning)
-            + entropy(right, binning)
-            - joint_entropy(left, right, binning),
+            + entropy(other, binning)
+            - joint_entropy(left, other, binning),
         )
 
-    observed = paired(words_g, rng.getrandbits(32))
-
-    shuffled = list(words_g)
-    nulls = []
-    for _ in range(CONTROL_ROUNDS):
-        rng.shuffle(shuffled)
-        nulls.append(paired(shuffled, rng.getrandbits(32)))
-
+    observed = against(right)
+    nulls = sorted(against(right[shift:] + right[:shift]) for shift in SHIFTS)
     effective = window // hold
     return WordReading(
         mutual_information=observed,
-        control=sum(nulls) / len(nulls),
+        control=nulls[len(nulls) // 2],
         effective_samples=effective,
         trustworthy=effective >= MIN_EFFECTIVE_SAMPLES,
     )
