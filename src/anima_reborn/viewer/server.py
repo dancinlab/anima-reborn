@@ -45,6 +45,7 @@ from ..crystal import TimeCrystal
 from ..dialogue import DialogueSession
 from ..emergence import EmergenceEngine
 from ..pipeline import Pipeline
+from ..rate import RateCell
 from ..repulsion import RepulsionField
 from ..sequence import SequenceEngine
 
@@ -72,6 +73,7 @@ TICK_RATES = {
     "dialogue": 8.0,
     "conversation": 8.0,
     "sequence": 8.0,
+    "rate": 8.0,
 }
 """Ticks per second, carried from the origin's `setInterval` periods so the
 engines run at the speed their thresholds were chosen against."""
@@ -435,6 +437,20 @@ class _SequenceHandler:
         return engine.describe()
 
 
+class _RateHandler:
+    """The population rate cell — a passive engine that cycles tell -> hold -> consume, holding a
+    past depth as a count and reading a fixed current symbol modulated by it. No controls; the page
+    draws the population, the held rate, and the current read tracking the held past."""
+
+    @staticmethod
+    def configure(engine: RateCell, params: dict[str, list[str]]) -> None:
+        pass  # auto-advancing; nothing to steer
+
+    @staticmethod
+    def describe(engine: RateCell) -> dict[str, Any]:
+        return engine.describe()
+
+
 _HANDLERS: dict[str, Any] = {
     "emergence": _EmergenceHandler,
     "crystal": _CrystalHandler,
@@ -446,6 +462,7 @@ _HANDLERS: dict[str, Any] = {
     "dialogue": _DialogueHandler,
     "conversation": _ConversationHandler,
     "sequence": _SequenceHandler,
+    "rate": _RateHandler,
 }
 
 
@@ -563,6 +580,7 @@ class Viewer:
             "dialogue": DialogueSession(seed=seed),
             "conversation": Conversation(seed=seed),
             "sequence": SequenceEngine(seed=seed),
+            "rate": RateCell(seed=seed),
         }
         self._engines = {
             name: _Guarded(engine, threading.Lock())
