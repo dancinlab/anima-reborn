@@ -112,6 +112,7 @@
   <button class="tab" data-tab="align">🧩 양상 정렬</button>
   <button class="tab" data-tab="dialogue">💬 소통</button>
   <button class="tab" data-tab="conversation">🗣️ 대화</button>
+  <button class="tab" data-tab="sequence">🧠 기억</button>
 </nav>
 
 <!-- ── Emergence ──────────────────────────────────────────────────────── -->
@@ -539,6 +540,37 @@
   </div>
 </section>
 
+<section class="panel" id="p-sequence">
+  <div class="card">
+    <h2>작업기억 — 최근 K개를 순서대로 붙잡는 시프트 체인</h2>
+    <p class="note">
+      폭의 벽(한 순간 최대 3비트)은 그대로지만 <strong>시간 축은 벽이 없습니다</strong>. 검증된
+      3비트 셀 4개를 <strong>시프트 체인</strong>(=한 칸씩 밀어내는 줄)으로 엮어, 매 턴 새 기호를
+      맨 앞에 쓰고 나머지를 한 칸씩 뒤로 옮깁니다. 체인은 <strong>최근 4개를 순서대로</strong>
+      기억합니다 — 총 12비트.
+    </p>
+    <p class="note" style="margin-top:-8px">
+      각 셀은 <strong>홀로 통합</strong>(6유닛 정확 Φ)이고 침묵을 건너 자기 비트를 붙잡습니다. 셀
+      사이 다리는 <strong>전송</strong>이지 통합이 아니라, 전체를 하나라 주장하지 않습니다. 얻는 것은
+      <strong>기억과 순서</strong>이지 언어가 아닙니다. 측정: <code>state/communication/accumulation.py</code>.
+    </p>
+
+    <div class="metrics">
+      <div class="metric"><div class="k">순서대로 유지</div><div class="v"><span id="sq-held">—</span> 비트</div></div>
+      <div class="metric"><div class="k">지나간 턴</div><div class="v" id="sq-turns">—</div></div>
+      <div class="metric"><div class="k">다음 기호까지</div><div class="v" id="sq-next">—</div></div>
+    </div>
+
+    <p class="label" style="margin-top:14px">테이프 — 최신(왼쪽) → 가장 오래됨(오른쪽)</p>
+    <div id="sq-tape" style="display:flex;gap:10px;margin-top:6px;min-height:96px"></div>
+
+    <p class="label" style="margin-top:14px">맨 앞 셀이 지금 붙잡은 상태 (3쌍의 차동)</p>
+    <canvas id="sq-front" height="70"></canvas>
+
+    <div class="status" id="sq-status"></div>
+  </div>
+</section>
+
 <footer>
   기본 창 크기(250표본)에서는 <strong>완전히 독립인</strong> 두 스트림도 상호정보량이
   약 <b>0.155비트</b>로 찍힙니다 — 결합이 아니라 표본이 적어서 생기는 인공물입니다.
@@ -730,7 +762,7 @@ function setBadge(el, text, cls) {
 // The server pushes a frame per engine tick over one long-lived connection.
 // Frames are stashed, not drawn on arrival; drawing happens on the display's
 // own refresh, so a burst of frames costs one repaint rather than several.
-const PREFIX = { emergence: "em", crystal: "cr", repulsion: "rp", pipeline: "pl", base: "bs", coupled: "cp", align: "al", dialogue: "dg", conversation: "cv" };
+const PREFIX = { emergence: "em", crystal: "cr", repulsion: "rp", pipeline: "pl", base: "bs", coupled: "cp", align: "al", dialogue: "dg", conversation: "cv", sequence: "sq" };
 const ROTATION = [];   // recent accumulated phase, so a stalled clock is visible
 
 let active = "base";
@@ -751,6 +783,7 @@ function controlsFor(name) {
                                  shuffled: $("al-shuffled").checked ? "1" : "0" };
   if (name === "dialogue") return {};   // no sliders — the human's choice goes via submitChoice
   if (name === "conversation") return {};   // moves go via cvSend
+  if (name === "sequence") return {};        // passive — no controls
   return { separation: $("pl-sep").value / 100 };
 }
 
@@ -813,6 +846,7 @@ function render(name, data) {
   else if (name === "align") renderAlign(data);
   else if (name === "dialogue") renderDialogue(data);
   else if (name === "conversation") renderConversation(data);
+  else if (name === "sequence") renderSequence(data);
   else renderPipeline(data);
 }
 
@@ -1256,6 +1290,61 @@ function renderCvReport(r) {
     <div class="status" style="margin-bottom:10px">${CV_TEXT[r.verdict] || r.verdict}</div>
     <div class="metrics">${dir(r.a, "A · 사람 → 엔진")}${dir(r.b, "B · 엔진 → 사람")}</div>
     <p class="note" style="margin-top:10px">채널 자체 충실도 ${r.channel_fidelity.toFixed(2)} (사람 천장) · ${r.width_note} · 순열 ${r.permutations}회 · α=${r.alpha}. 로그는 <code>state/communication/sessions/</code>.</p>`;
+}
+
+// ── 기억 (sequence) ──────────────────────────────────────────────────────────
+// A passive shift chain: the tape of the last K 3-bit words, newest left. Each word is a
+// composite glyph; the front cell's held state is shown as three differential bars.
+const SQ_REF = [["○", "●"], ["△", "▲"], ["□", "■"]];
+function sqGlyph(word) { return [0, 1, 2].map(j => SQ_REF[j][(word >> j) & 1]).join(""); }
+
+function renderSequence(d) {
+  $("sq-held").textContent = `${d.held_bits}/${d.capacity_bits}`;
+  $("sq-turns").textContent = d.turns;
+  $("sq-next").textContent = `${d.ticks_to_next} 틱`;
+
+  const K = d.capacity_bits / 3;
+  const byAge = {};
+  (d.cells || []).forEach(c => { byAge[c.age] = c; });
+  const tape = $("sq-tape");
+  tape.innerHTML = "";
+  for (let a = 0; a < K; a++) {
+    const c = byAge[a];
+    const card = document.createElement("div");
+    card.style.cssText = "flex:1;text-align:center;border:1px solid var(--line);border-radius:10px;"
+      + `padding:12px 6px;background:${a === 0 ? "#202538" : "var(--inset)"}`;
+    card.innerHTML = c
+      ? `<div style="font-size:30px;letter-spacing:3px">${sqGlyph(c.word)}</div>`
+        + `<div class="label" style="margin:8px 0 0">${a === 0 ? "방금" : a + "턴 전"}</div>`
+      : '<div style="font-size:30px;color:var(--dim)">·</div>'
+        + '<div class="label" style="margin:8px 0 0">빈칸</div>';
+    tape.appendChild(card);
+  }
+
+  const { ctx, w, h } = fit($("sq-front"));
+  const fv = d.front_values || [];
+  ctx.strokeStyle = "rgba(139,146,163,.3)";
+  ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+  if (fv.length === 6) {
+    const cw = w / 3;
+    for (let p = 0; p < 3; p++) {
+      const diff = fv[2 * p] - fv[2 * p + 1];
+      const cx = p * cw + cw / 2;
+      const bh = Math.min(h / 2 - 12, Math.abs(diff) / 1.6 * (h / 2 - 12));
+      ctx.fillStyle = diff > 0 ? "#7b9aff" : "#ff7b9a";
+      ctx.fillRect(cx - cw * 0.28, diff > 0 ? h / 2 - bh : h / 2, cw * 0.56, bh);
+      ctx.fillStyle = "#8b92a3";
+      ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`쌍${p} · ${diff > 0 ? 0 : 1}`, cx, h - 3);
+    }
+  }
+
+  const status = $("sq-status");
+  status.className = "status";
+  status.textContent = d.held_bits === d.capacity_bits
+    ? `테이프가 가득 찼습니다 — 최근 ${K}개 기호가 순서대로 살아 있습니다. 매 턴 가장 오래된 것이 밀려납니다.`
+    : `테이프를 채우는 중 — 지금까지 ${d.turns}턴.`;
 }
 
 const LEARNED = [];   // 배운 양의 이력 — 곡선이 자라는 걸 본다

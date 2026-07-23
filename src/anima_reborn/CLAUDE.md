@@ -20,6 +20,7 @@ Rendering, timers and DOM wiring stay in the origin; only the maths lives here.
 | `words.py` | words as a continuing drive, always paired with a null control | (new — not in the origin) |
 | `dialogue.py` | the Lewis-Skyrms signaling game — `channel`/`pick`/`reinforce` primitives (imported by the `state/` reproducible half) plus `DialogueSession`, the live human-in-the-partner's-seat half the viewer's `소통` tab drives. `channel(bits=3)` adds the PAIRS path | (new — not in the origin) |
 | `conversation.py` | `Conversation`, the FREE 3-bit exchange (`BASELINE→FREE→AUDIT→DONE`) the `대화` tab drives — factorized per-bit policies, the corrected display-scramble null, k-of-3 rank; the free log is never evidence, only the blind audit is | (new — not in the origin) |
+| `sequence.py` | `SequenceEngine`, the shift chain the `기억` tab drives — K proven 3-bit cells hold the last K symbols IN ORDER (time accumulation); per-cell integration, the inter-cell bridge a TRANSPORT claim only; `deaf_bridge=` is the null (default off, bit-identical). Measured by `state/communication/accumulation.py` | (new — not in the origin) |
 
 `pipeline.py` imports `PHASE_RATE` / `PULL` / `DAMPING` from `repulsion.py` — the two
 engines share one drift law, and it is defined once.

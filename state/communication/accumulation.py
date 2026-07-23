@@ -44,12 +44,10 @@ import statistics
 from collections import Counter
 
 from anima_reborn.coupled import ALTERNATING, FIXED, CoupledEngine, Wiring
-from anima_reborn.dialogue import channel
+from anima_reborn.sequence import BITS, CELLS, SequenceEngine
 
-BITS = 3
 UNITS = 2 * BITS
 CHAIN = 0.2
-CELLS = 4          # tape length K — holds the last 4 symbols
 SEQUENCES = 300    # independent symbol streams (enough to push the MI floor well below signal)
 TELL = 200
 
@@ -92,24 +90,13 @@ def _floor(pairs: list[tuple[int, int]], trials: int = 150) -> float:
 
 
 def run_chain(symbols: list[int], *, seed: int, deaf_bridge: bool = False) -> list[int | None]:
-    """Push a stream of symbols through the K-cell shift chain; return the final tape, where
-    tape[j] is the word held in the cell of age j (0 = most recent)."""
-    tape: list[int | None] = [None] * CELLS
-    base = seed * 100_003
-    op = 0
+    """Push a stream of symbols through the shipped `SequenceEngine` shift chain; return the
+    final tape, where tape[j] is the word held in the cell of age j (0 = most recent). This
+    DRIVES the shipped engine — a script measures the engine, not a copy of it."""
+    engine = SequenceEngine(seed=seed, deaf_bridge=deaf_bridge)
     for symbol in symbols:
-        # Shift every held word one cell down, oldest off the end.
-        for k in range(CELLS - 1, 0, -1):
-            src = tape[k - 1]
-            if src is None:
-                tape[k] = None
-            else:
-                op += 1
-                # The bridge: transport the held word to the next cell over the clean wire.
-                tape[k] = channel(src, seed=base + op, deaf=deaf_bridge, bits=BITS)
-        op += 1
-        tape[0] = channel(symbol, seed=base + op, bits=BITS)  # write the new symbol into cell 0
-    return tape
+        engine.turn(symbol)
+    return engine.tape()
 
 
 def _forgetting(deaf_bridge: bool = False) -> list[tuple[int, int]]:

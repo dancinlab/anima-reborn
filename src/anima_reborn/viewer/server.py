@@ -46,6 +46,7 @@ from ..dialogue import DialogueSession
 from ..emergence import EmergenceEngine
 from ..pipeline import Pipeline
 from ..repulsion import RepulsionField
+from ..sequence import SequenceEngine
 
 __all__ = ["Viewer", "serve"]
 
@@ -70,6 +71,7 @@ TICK_RATES = {
     "align": 60.0,
     "dialogue": 8.0,
     "conversation": 8.0,
+    "sequence": 8.0,
 }
 """Ticks per second, carried from the origin's `setInterval` periods so the
 engines run at the speed their thresholds were chosen against."""
@@ -420,6 +422,19 @@ class _ConversationHandler:
         return frame
 
 
+class _SequenceHandler:
+    """The shift-chain working memory — a passive engine that writes a new symbol every few
+    ticks and shifts the tape. No controls; the page draws the held words and their ages."""
+
+    @staticmethod
+    def configure(engine: SequenceEngine, params: dict[str, list[str]]) -> None:
+        pass  # auto-advancing; nothing to steer
+
+    @staticmethod
+    def describe(engine: SequenceEngine) -> dict[str, Any]:
+        return engine.describe()
+
+
 _HANDLERS: dict[str, Any] = {
     "emergence": _EmergenceHandler,
     "crystal": _CrystalHandler,
@@ -430,6 +445,7 @@ _HANDLERS: dict[str, Any] = {
     "align": _AlignHandler,
     "dialogue": _DialogueHandler,
     "conversation": _ConversationHandler,
+    "sequence": _SequenceHandler,
 }
 
 
@@ -546,6 +562,7 @@ class Viewer:
             "align": Aligner(seed=seed),
             "dialogue": DialogueSession(seed=seed),
             "conversation": Conversation(seed=seed),
+            "sequence": SequenceEngine(seed=seed),
         }
         self._engines = {
             name: _Guarded(engine, threading.Lock())
