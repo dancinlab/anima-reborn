@@ -113,6 +113,7 @@
   <button class="tab" data-tab="dialogue">💬 소통</button>
   <button class="tab" data-tab="conversation">🗣️ 대화</button>
   <button class="tab" data-tab="sequence">🧠 기억</button>
+  <button class="tab" data-tab="rate">📊 레이트</button>
 </nav>
 
 <!-- ── Emergence ──────────────────────────────────────────────────────── -->
@@ -571,6 +572,41 @@
   </div>
 </section>
 
+<!-- ── Rate cell ──────────────────────────────────────────────────────── -->
+<section class="panel" id="p-rate">
+  <div class="card">
+    <h2>레이트 셀 — 아날로그 깊이를 들고, 현재 쓰기를 변조한다</h2>
+    <p class="note">
+      단일 래치는 기호의 <strong>부호</strong>만 붙잡습니다. 문턱이 흩어진 래치 <strong>N개 무리</strong>는
+      과거의 아날로그 <strong>깊이</strong>를 <strong>켜진 개수</strong>로 바꿔 안정하게 듭니다 — 포화가 코드를
+      지우는 게 아니라 지킵니다. 이어 그 개수가 <strong>현재 쓰기의 이득을 곱해</strong>(이득은 양수라 부호를
+      못 뒤집습니다) 같은 현재 기호가 <strong>든 과거에 따라 다르게</strong> 읽힙니다.
+    </p>
+    <p class="note" style="margin-top:-8px">
+      얻는 것은 <strong>쓰이는 문맥</strong>(든 과거가 현재 쓰기에 초-덧셈적으로 작용)이지 언어가 아닙니다 —
+      순간당 폭은 비트의 일부. 측정: <code>rate_code.py</code> · <code>context_modulation.py</code> ·
+      <code>context_synergy.py</code>.
+    </p>
+
+    <div class="metrics">
+      <div class="metric"><div class="k">단계</div><div class="v" id="rt-phase">—</div></div>
+      <div class="metric"><div class="k">든 레이트</div><div class="v"><span id="rt-rate">—</span></div></div>
+      <div class="metric"><div class="k">현재 읽기</div><div class="v" id="rt-count">—</div></div>
+    </div>
+
+    <p class="label" style="margin-top:14px">과거 개체군 — 켜진 개수가 아날로그 기억 (파랑=위 · 분홍=아래)</p>
+    <canvas id="rt-population" height="84"></canvas>
+
+    <p class="label" style="margin-top:14px">현재 쓰기 — 든 개수로 이득을 곱해 변조 (소비 단계)</p>
+    <canvas id="rt-current" height="84"></canvas>
+
+    <p class="label" style="margin-top:14px">문맥 — 같은 현재 기호가 든 과거 깊이에 따라 다르게 읽힌다</p>
+    <canvas id="rt-history" height="130"></canvas>
+
+    <div class="status" id="rt-status"></div>
+  </div>
+</section>
+
 <footer>
   기본 창 크기(250표본)에서는 <strong>완전히 독립인</strong> 두 스트림도 상호정보량이
   약 <b>0.155비트</b>로 찍힙니다 — 결합이 아니라 표본이 적어서 생기는 인공물입니다.
@@ -762,7 +798,7 @@ function setBadge(el, text, cls) {
 // The server pushes a frame per engine tick over one long-lived connection.
 // Frames are stashed, not drawn on arrival; drawing happens on the display's
 // own refresh, so a burst of frames costs one repaint rather than several.
-const PREFIX = { emergence: "em", crystal: "cr", repulsion: "rp", pipeline: "pl", base: "bs", coupled: "cp", align: "al", dialogue: "dg", conversation: "cv", sequence: "sq" };
+const PREFIX = { emergence: "em", crystal: "cr", repulsion: "rp", pipeline: "pl", base: "bs", coupled: "cp", align: "al", dialogue: "dg", conversation: "cv", sequence: "sq", rate: "rt" };
 const ROTATION = [];   // recent accumulated phase, so a stalled clock is visible
 
 let active = "base";
@@ -847,6 +883,7 @@ function render(name, data) {
   else if (name === "dialogue") renderDialogue(data);
   else if (name === "conversation") renderConversation(data);
   else if (name === "sequence") renderSequence(data);
+  else if (name === "rate") renderRate(data);
   else renderPipeline(data);
 }
 
@@ -1345,6 +1382,68 @@ function renderSequence(d) {
   status.textContent = d.held_bits === d.capacity_bits
     ? `테이프가 가득 찼습니다 — 최근 ${K}개 기호가 순서대로 살아 있습니다. 매 턴 가장 오래된 것이 밀려납니다.`
     : `테이프를 채우는 중 — 지금까지 ${d.turns}턴.`;
+}
+
+const RT_PHASE_KO = { tell: "쓰기 (과거 → 개수)", hold: "유지 (침묵을 건너)", consume: "소비 (현재를 변조)" };
+
+function rtDrawPopulation(canvas, signs, n) {
+  const { ctx, w, h } = fit(canvas);
+  if (!signs || !signs.length) {
+    ctx.fillStyle = "#8b92a3"; ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.fillText("—", 4, h / 2);
+    return;
+  }
+  const cols = 16, rows = Math.ceil(n / cols);
+  const cw = w / cols, ch = h / rows, pad = Math.min(cw, ch) * 0.16;
+  for (let i = 0; i < n; i++) {
+    const up = signs[i] === 1;
+    const cx = (i % cols) * cw, cy = Math.floor(i / cols) * ch;
+    ctx.fillStyle = up ? "#7b9aff" : "#ff7b9a";
+    ctx.fillRect(cx + pad, cy + pad, cw - 2 * pad, ch - 2 * pad);
+  }
+}
+
+function rtDrawHistory(canvas, d) {
+  const { ctx, w, h } = fit(canvas);
+  const levels = d.past_levels || [];
+  // latest cur_count per past depth, from the rolling history
+  const latest = {};
+  (d.history || []).forEach(e => { latest[e.past_depth] = e.cur_count; });
+  const n = levels.length, bw = w / n, base = h - 20, top = 12, maxC = d.n_pairs || 32;
+  ctx.strokeStyle = "rgba(139,146,163,.25)";
+  ctx.beginPath(); ctx.moveTo(0, base); ctx.lineTo(w, base); ctx.stroke();
+  ctx.font = "11px ui-sans-serif, system-ui, sans-serif"; ctx.textAlign = "center";
+  for (let i = 0; i < n; i++) {
+    const depth = levels[i], c = latest[depth];
+    const cx = i * bw + bw / 2;
+    const here = Math.abs(depth - d.past_depth) < 1e-6;
+    if (c != null) {
+      const bh = (c / maxC) * (base - top);
+      ctx.fillStyle = here ? "#8b9bff" : "#4a5578";
+      ctx.fillRect(cx - bw * 0.22, base - bh, bw * 0.44, bh);
+      ctx.fillStyle = "#c7ccd8";
+      ctx.fillText(`${c}`, cx, base - bh - 5);
+    } else {
+      ctx.fillStyle = "#3a4056"; ctx.fillText("·", cx, base - 6);
+    }
+    ctx.fillStyle = here ? "#8b9bff" : "#8b92a3";
+    ctx.fillText(`과거 ${depth}`, cx, h - 5);
+  }
+}
+
+function renderRate(d) {
+  $("rt-phase").textContent = RT_PHASE_KO[d.phase] || d.phase;
+  const shown = d.held_rate == null ? d.rate : d.held_rate;
+  $("rt-rate").textContent = `${Math.round(shown * 100)}% · ${Math.round(shown * d.n_pairs)}/${d.n_pairs}`;
+  $("rt-count").textContent = d.cur_count == null ? "—" : `${d.cur_count}/${d.n_pairs}`;
+  rtDrawPopulation($("rt-population"), d.population, d.n_pairs);
+  rtDrawPopulation($("rt-current"), d.current, d.n_pairs);
+  rtDrawHistory($("rt-history"), d);
+  const status = $("rt-status");
+  status.className = "status";
+  if (d.phase === "tell") status.textContent = `과거 깊이 ${d.past_depth}를 개체군에 쓰는 중 — 개수가 깊이로 변환됩니다.`;
+  else if (d.phase === "hold") status.textContent = `침묵을 건너 개수를 붙잡는 중 — 든 레이트가 아날로그 기억입니다.`;
+  else status.textContent = `현재 기호(0.5)를 든 개수로 변조해 읽는 중 — 아래 막대가 과거에 따라 달라집니다.`;
 }
 
 const LEARNED = [];   // 배운 양의 이력 — 곡선이 자라는 걸 본다
