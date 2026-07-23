@@ -155,21 +155,22 @@ _DISPLAY_KEYS = frozenset({"trace", "markers", "buttons"})
 
 
 def display_payload(
-    trace: list[tuple[float, float]],
+    trace: list[tuple[float, ...]],
     markers: list[str],
     buttons: list[str],
 ) -> dict[str, Any]:
-    """Build the direction-B frame the human reads — the second aperture.
+    """Build a direction-B frame the human reads — the second aperture.
 
-    Its ONLY inputs are the raw HOLD trace, the neutral per-session unit->marker
-    bijection, and the (already randomized) button order. There is no argument for the
-    referent, the signal, the latch word, or the success — a lossy display cannot leak an
-    answer it was never handed. The two markers keep unit identity stable across trials
-    (the 1-bit channel would be unreadable if the units were re-shuffled every trial),
-    while positions are randomized so screen position is not a covert codec.
+    Its ONLY inputs are the raw HOLD trace (2 units wide for the 1-bit ring, 6 for the
+    3-bit PAIRS channel), the neutral per-unit markers, and the (already randomized) button
+    order. There is no argument for the referent, the signal, the latch word, or the
+    success — a lossy display cannot leak an answer it was never handed. The markers keep
+    unit identity stable across trials (the channel would be unreadable if the units were
+    re-shuffled every trial), while positions are randomized so screen position is not a
+    covert codec.
     """
     return {
-        "trace": [[round(u0, 4), round(u1, 4)] for u0, u1 in trace],
+        "trace": [[round(v, 4) for v in row] for row in trace],
         "markers": list(markers),
         "buttons": list(buttons),
     }
