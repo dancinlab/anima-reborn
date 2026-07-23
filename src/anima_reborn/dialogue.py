@@ -62,44 +62,71 @@ HOLD = 120
 RATE = 0.3
 
 
-def channel_trace(signal: int, *, seed: int, deaf: bool = False) -> list[tuple[float, float]]:
-    """The engine as a noisy 1-bit wire, returning the whole HOLD trajectory.
+# The 3-bit channel is the proven `Wiring.PAIRS` substrate (units/2 latches, integrated at
+# chain=0.2). `state/communication/conversation_channel.py` MEASURED its driven-decode
+# fidelity at 1.000 (joint) over the whole TELL/HOLD sweep, with the deaf null at 1/8, so
+# the 1-bit envelope TELL=200/HOLD=120 already carries 3 bits cleanly — no new constants.
+PAIRS_CHAIN = 0.2
 
-    A signal drives the 2-unit ring during a TELL phase; then the drive is cut and the
-    coupling frozen, and the ring is read over a HOLD phase. This returns the HOLD
-    trajectory itself — the raw thing the human sees, with no sign, no difference, no
-    latch derived for them. `deaf` sets coupling to 1.0 for the whole run so the drive
-    is bit-for-bit unreachable, which is the null proving the channel was in the path.
+
+def _pairs_drive(symbol: int, bits: int) -> tuple[float, ...]:
+    """Per-unit drive for the PAIRS channel: pair j is pushed +/- by bit j of `symbol`."""
+    drive: list[float] = []
+    for j in range(bits):
+        bit = (symbol >> j) & 1
+        drive += [0.8, -0.8] if bit == 0 else [-0.8, 0.8]
+    return tuple(drive)
+
+
+def channel_trace(
+    signal: int, *, seed: int, deaf: bool = False, bits: int = 1
+) -> list[tuple[float, ...]]:
+    """The engine as a noisy wire, returning the whole HOLD trajectory (the raw thing the
+    human sees — no sign, no difference, no latch derived for them).
+
+    `bits=1` (default) is the 2-unit RING, byte-for-byte the published 1-bit path. `bits=3`
+    is the 6-unit `Wiring.PAIRS` (3 odd latches, chain 0.2), each pair driven +/- by one bit
+    of `signal`. A signal drives during a TELL phase; then the drive is cut and the coupling
+    frozen for a HOLD phase. `deaf` sets coupling to 1.0 for the whole run so the drive is
+    bit-for-bit unreachable — the null proving the channel was in the path.
 
     Stepping HOLD times one at a time draws the same WALK noise sequence as
-    `engine.run(HOLD)`, so the final values — and therefore `channel`'s latch bit — stay
+    `engine.run(HOLD)`, so `bits=1`'s final values — and `channel`'s latch bit — stay
     bit-identical to the reproducible harness's original `_channel`.
     """
-    drive = (0.8, -0.8) if signal == 0 else (-0.8, 0.8)
+    if bits == 1:
+        wiring, units, chain = Wiring.RING, 2, 0.0
+        drive: tuple[float, ...] = (0.8, -0.8) if signal == 0 else (-0.8, 0.8)
+    elif bits == 3:
+        wiring, units, chain = Wiring.PAIRS, 6, PAIRS_CHAIN
+        drive = _pairs_drive(signal, bits)
+    else:
+        raise ValueError(f"bits must be 1 or 3, got {bits}")
     engine = CoupledEngine(
-        units=2, wiring=Wiring.RING,
+        units=units, wiring=wiring, chain=chain,
         rhythm=FIXED if deaf else ALTERNATING,
-        drive=drive, seed=seed, initial=(0.0, 0.0),
+        drive=drive, seed=seed, initial=(0.0,) * units,
     )
     engine.run(TELL)
     engine.rhythm = FIXED
     engine.drive = 0.0
-    trace: list[tuple[float, float]] = []
+    trace: list[tuple[float, ...]] = []
     for _ in range(HOLD):
-        values = engine.step().values
-        trace.append((values[0], values[1]))
+        trace.append(tuple(engine.step().values))
     return trace
 
 
-def channel(signal: int, *, seed: int, deaf: bool = False) -> int:
-    """Hold a signal, read the latch bit — `sign(v0 - v1)` of the final HOLD state.
-
-    This is the receiver the published numbers and the frozen-policy null were measured
-    against (a learned policy over this bit, not a less-revision probe). The viewer reuses
-    it unchanged rather than implementing a different receiver.
+def channel(signal: int, *, seed: int, deaf: bool = False, bits: int = 1) -> int:
+    """Hold a signal, read the latch word — the `sign(v[2j] - v[2j+1])` of each pair packed
+    little-endian. `bits=1` is `sign(v0 - v1)`, the receiver the published numbers and the
+    frozen-policy null were measured against.
     """
-    final = channel_trace(signal, seed=seed, deaf=deaf)[-1]
-    return 0 if (final[0] - final[1]) > 0 else 1
+    final = channel_trace(signal, seed=seed, deaf=deaf, bits=bits)[-1]
+    word = 0
+    for j in range(bits):
+        bit = 0 if (final[2 * j] - final[2 * j + 1]) > 0 else 1
+        word |= bit << j
+    return word
 
 
 def pick(row: list[float], rng: random.Random) -> int:
