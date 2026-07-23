@@ -659,7 +659,8 @@ const KO = {
   // 소통 — 판정 원시값(raw)만 매핑, 배지 색은 raw 로 판정한다.
   formed: "관례 형성", no_evidence: "근거 없음",
   learn: "학습", measure: "측정", done: "종료",
-  day0: "day-0", frozen: "고정 엔진(에코)", deaf: "귀머거리 채널", scramble: "신호 파괴", yoked: "yoked",
+  day0: "day-0", frozen: "고정 엔진(에코)", deaf: "귀머거리 채널", scramble: "신호 파괴",
+  dscramble: "디스플레이 뒤섞기", yoked: "yoked",
 };
 const ko = v => KO[v] || v;
 const EMERGENCE_TEXT = {
@@ -962,6 +963,7 @@ const DIALOGUE_TEXT = {
   two_way_session_evidence: "이 세션에서만: 이 사람과 이 엔진이 결과만을 통해 두 개의 사적인 1비트 단방향 관례를 세우고, 피드백 없는 시험에서 썼습니다. 사람 일반·이해·언어에 대한 주장이 아닙니다.",
   one_way_session_evidence: "이 세션에서는 한 방향의 1비트 관례 증거만 있습니다. 양방향 소통으로 보고하지 않습니다.",
   no_session_evidence: "이 세션에서는 모든 대조군을 넘는 관례 증거가 없습니다.",
+  audit_failed: "감사 대조군 실패 — 디스플레이 뒤섞기 귀무가 우연을 넘습니다. 화면이 답을 흘렸다는 뜻이라, 이 세션의 어떤 양성 정확도에도 소통 증거를 부여하지 않습니다.",
 };
 let dgNonce = null;
 
