@@ -44,51 +44,21 @@ from __future__ import annotations
 import random
 import statistics
 
-from anima_reborn.coupled import ALTERNATING, FIXED, CoupledEngine, Wiring
+# The channel primitives now live in `src/anima_reborn/dialogue.py` — a capability in
+# `src/` is the one the state script re-derives, not a copy of it. Importing them (rather
+# than keeping a second copy) is what makes `play` bit-identical to the published numbers
+# while the SAME functions drive the viewer's live session (`DialogueSession`). The
+# leading-underscore aliases keep the static-audit test (`_reinforce`'s signature) and the
+# rest of this script unchanged.
+from anima_reborn.dialogue import (
+    channel as _channel,
+    pick as _pick,
+    reinforce as _reinforce,
+)
 
 EPISODES = 1200
-RATE = 0.3
 TAIL = 300
 SEEDS = 12
-TELL = 200
-HOLD = 120
-
-
-def _channel(signal: int, *, seed: int, deaf: bool = False) -> int:
-    """The engine as a noisy 1-bit wire: hold a signal, read the latch bit.
-
-    `deaf` sets coupling to 1.0 for the listen phase so the drive is unreachable
-    — the held bit then owes nothing to the signal, which is the null proving the
-    channel was in the path."""
-    drive = (0.8, -0.8) if signal == 0 else (-0.8, 0.8)
-    engine = CoupledEngine(
-        units=2, wiring=Wiring.RING,
-        rhythm=FIXED if deaf else ALTERNATING,
-        drive=drive, seed=seed, initial=(0.0, 0.0),
-    )
-    engine.run(TELL)
-    engine.rhythm = FIXED
-    engine.drive = 0.0
-    values = engine.run(HOLD).values
-    return 0 if (values[0] - values[1]) > 0 else 1
-
-
-def _pick(row: list[float], rng: random.Random) -> int:
-    total = sum(row)
-    threshold = rng.random() * total
-    cumulative = 0.0
-    for i, weight in enumerate(row):
-        cumulative += weight
-        if threshold < cumulative:
-            return i
-    return len(row) - 1
-
-
-def _reinforce(policy: list[list[float]], state: int, choice: int, reward: float) -> None:
-    """The only update rule. Reads ONE agent's own (state, choice, success). It
-    is handed a single policy and cannot reach the other agent — the static audit
-    is that this signature has no argument for anyone else's state."""
-    policy[state][choice] += RATE * reward
 
 
 def play(

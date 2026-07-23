@@ -18,6 +18,7 @@ Rendering, timers and DOM wiring stay in the origin; only the maths lives here.
 | `align.py` | the only module that LEARNS — co-occurrence teaches two modalities to meet | (new — not in the origin) |
 | `substrate.py` | drive an engine from every state → measured TPM → Phi | (new — not in the origin) |
 | `words.py` | words as a continuing drive, always paired with a null control | (new — not in the origin) |
+| `dialogue.py` | the Lewis-Skyrms signaling game — `channel`/`pick`/`reinforce` primitives (imported by the `state/` reproducible half) plus `DialogueSession`, the live human-in-the-partner's-seat half the viewer's `소통` tab drives | (new — not in the origin) |
 
 `pipeline.py` imports `PHASE_RATE` / `PULL` / `DAMPING` from `repulsion.py` — the two
 engines share one drift law, and it is defined once.
