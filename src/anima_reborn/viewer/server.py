@@ -40,6 +40,7 @@ from ..coupled import (
     CoupledEngine,
     Wiring,
 )
+from ..conversation import Conversation
 from ..crystal import TimeCrystal
 from ..dialogue import DialogueSession
 from ..emergence import EmergenceEngine
@@ -68,6 +69,7 @@ TICK_RATES = {
     "coupled": 30.0,
     "align": 60.0,
     "dialogue": 8.0,
+    "conversation": 8.0,
 }
 """Ticks per second, carried from the origin's `setInterval` periods so the
 engines run at the speed their thresholds were chosen against."""
@@ -383,6 +385,41 @@ class _DialogueHandler:
         return frame
 
 
+class _ConversationHandler:
+    """The free 3-bit conversation — the second interactive tab. The human's move is
+    richer than the dialogue tab's single choice: a direction pick, a composed signal, or a
+    read referent, all carried on the control query. `step` (in the ticker) drains it; a
+    completed session's logs are written to `state/`."""
+
+    @staticmethod
+    def configure(session: Conversation, params: dict[str, list[str]]) -> None:
+        raw_nonce = params.get("nonce")
+        if not raw_nonce:
+            return
+        try:
+            nonce = int(raw_nonce[0])
+        except ValueError:
+            return
+        move: dict[str, Any] = {}
+        if "move" in params:
+            move["move"] = params["move"][0]
+        for key in ("sig", "ref", "act"):
+            if key in params:
+                try:
+                    move[key] = int(params[key][0])
+                except ValueError:
+                    pass
+        session.submit(nonce, move)
+
+    @staticmethod
+    def describe(session: Conversation) -> dict[str, Any]:
+        frame = session.describe()
+        report = session.take_report()
+        if report is not None:
+            _persist_session(report)
+        return frame
+
+
 _HANDLERS: dict[str, Any] = {
     "emergence": _EmergenceHandler,
     "crystal": _CrystalHandler,
@@ -392,6 +429,7 @@ _HANDLERS: dict[str, Any] = {
     "coupled": _CoupledHandler,
     "align": _AlignHandler,
     "dialogue": _DialogueHandler,
+    "conversation": _ConversationHandler,
 }
 
 
@@ -507,6 +545,7 @@ class Viewer:
             "coupled": CoupledEngine(seed=seed),
             "align": Aligner(seed=seed),
             "dialogue": DialogueSession(seed=seed),
+            "conversation": Conversation(seed=seed),
         }
         self._engines = {
             name: _Guarded(engine, threading.Lock())
