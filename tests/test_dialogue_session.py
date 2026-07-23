@@ -95,7 +95,8 @@ class TestSessionMechanics:
     def test_a_session_completes_and_reports_both_directions(self) -> None:
         report = _play(DialogueSession(seed=5), lambda p: 0)
         assert report["verdict"] in {
-            "two_way_session_evidence", "one_way_session_evidence", "no_session_evidence"
+            "two_way_session_evidence", "one_way_session_evidence",
+            "no_session_evidence", "audit_failed",
         }
         for key in ("a", "b"):
             assert report[key]["verdict"] in {"formed", "no_evidence"}
@@ -113,6 +114,35 @@ class TestSessionMechanics:
         so the honest verdict is no evidence — the gate does not reward a degenerate code."""
         report = _play(DialogueSession(seed=8), lambda p: 0)
         assert report["verdict"] == "no_session_evidence"
+
+
+class TestTheDisplayScrambleNull:
+    """The second aperture, guarded by its own targeted null: flipping the display's unit
+    identity per trial must destroy a reading that depends on the learned display
+    convention, and a reading that survives the flip (a leak) voids the whole session."""
+
+    def test_the_scramble_arm_is_scheduled_and_actually_flips(self) -> None:
+        session = DialogueSession(seed=1)
+        _play(session, lambda p: 0)
+        rows = [e for e in session._log if e.get("arm") == "dscramble"]
+        assert rows, "no display-scramble trials were scheduled"
+        assert all("markers_swapped" in e for e in rows)
+        assert {e["markers_swapped"] for e in rows} == {True, False}, "the flip never varied"
+
+    def test_a_display_bypass_reading_fails_the_audit(self) -> None:
+        """A 'human' who reads the true latch directly — bypassing the display — keeps
+        recovering even when the display identity is scrambled, so the session is voided
+        as audit_failed rather than being quietly reported as no evidence."""
+        def leak(pending: dict) -> int:
+            order = pending["order"]
+            if pending["spec"]["dir"] == "a":
+                return order.index(pending["spec"]["ref"])
+            bit = channel(pending["signal"], seed=pending["channel_seed"])
+            return order.index(bit)
+
+        report = _play(DialogueSession(seed=11), leak)
+        assert report["verdict"] == "audit_failed", report["verdict"]
+        assert report["b"]["nulls"]["dscramble"]["rate"] > 0.65
 
 
 class TestTheEchoControl:

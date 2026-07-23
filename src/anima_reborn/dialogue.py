@@ -250,6 +250,7 @@ class DialogueSession:
         add("test", _B, _MAIN, TEST_LIVE_PER_DIR)
         add("test", _B, _MAIN, TEST_NULL_B_PER_ARM, arm="frozen")
         add("test", _B, _MAIN, TEST_NULL_B_PER_ARM, arm="deaf")
+        add("test", _B, _MAIN, TEST_NULL_B_PER_ARM, arm="dscramble")
         # Yoked: a second convention attempt on a FRESH engine and new vocabulary, reward a
         # coin — runs last, when the now-practiced human would help if anything could, so it
         # is the conservative direction.
@@ -301,14 +302,29 @@ class DialogueSession:
         else:
             # Engine sends: pick a signal, run the channel, show ONLY the raw trace. The
             # options are the two referent glyphs, in randomized order.
-            send_policy = self._frozen_send if spec["arm"] == "frozen" else self._send[ctx]
+            arm = spec["arm"]
+            send_policy = self._frozen_send if arm == "frozen" else self._send[ctx]
             signal = pick(send_policy[spec["ref"]], self._rng)
-            deaf = spec["arm"] == "deaf"
+            deaf = arm == "deaf"
             trace = channel_trace(signal, seed=channel_seed, deaf=deaf)
+            # Display-identity scramble (the second-aperture null): on a `dscramble` trial
+            # flip the two units' identity — both curve order and marker — with prob 1/2,
+            # holding the referent, engine policy and buttons fixed. If the human's reading
+            # is really the learned display convention, this must destroy it (the arm sits
+            # at chance); if recovery survives, some unlogged cue leaks and the session is
+            # `audit_failed`. Scoring never touches the trace, so flipping the shown copy
+            # changes only what the human can access, not the truth `act == referent`.
+            markers = list(vocab["markers"])
+            display_trace = trace
+            swapped = arm == "dscramble" and self._rng.random() < 0.5
+            if swapped:
+                markers = markers[::-1]
+                display_trace = [(u1, u0) for u0, u1 in trace]
             pending["signal"] = signal
             pending["trace"] = trace
+            pending["markers_swapped"] = swapped
             pending["display"] = display_payload(
-                trace, vocab["markers"], [vocab["ref"][k] for k in order]
+                display_trace, markers, [vocab["ref"][k] for k in order]
             )
         self._pending = pending
         self._submitted = None
@@ -380,7 +396,10 @@ class DialogueSession:
         else:
             act = chosen  # the human's named referent
             success = int(act == referent)
-            entry.update(signal=pending["signal"], act=act, success=success)
+            entry.update(
+                signal=pending["signal"], act=act, success=success,
+                markers_swapped=pending.get("markers_swapped", False),
+            )
             if learning:
                 reward = float(coin) if block == "yoked_train" else float(success)
                 reinforce(self._send[ctx], referent, pending["signal"], reward)
@@ -513,23 +532,29 @@ def session_stats(log: list[dict[str, Any]], *, vocab: dict[str, Any] | None = N
             frozen = _accuracy(live, "frozen_success")
             deaf = _accuracy(live, "deaf_success")
             scramble = _accuracy(live, "scramble_success")
+            dscramble = (0, 0)  # display leak is a direction-B concern (A shows the referent)
         else:
             frozen = _accuracy(block("test", direction, arm="frozen"))
             deaf = _accuracy(block("test", direction, arm="deaf"))
             scramble = (0, 0)
+            dscramble = _accuracy(block("test", direction, arm="dscramble"))
         sig_support = _support(live, "signal")
         act_support = _support(live, "act")
 
         def rate(pair: tuple[int, int]) -> float | None:
             return None if pair[1] == 0 else pair[0] / pair[1]
 
-        nulls = {"day0": day0, "frozen": frozen, "deaf": deaf, "scramble": scramble, "yoked": yoked}
-        # The hard gate is the permutation test plus the three STRUCTURAL nulls that must
-        # sit at chance: day-0 (a display leak would lift it), frozen (the echo — the
-        # engine's learned half must be load-bearing), and deaf (the channel must be in the
-        # path). scramble and yoked are reported beside as diagnostics, not gates — yoked is
-        # supporting evidence, not the load-bearing null (fable).
-        structural = (rate(day0), rate(frozen), rate(deaf))
+        nulls = {
+            "day0": day0, "frozen": frozen, "deaf": deaf,
+            "scramble": scramble, "dscramble": dscramble, "yoked": yoked,
+        }
+        # The hard gate is the permutation test plus the STRUCTURAL nulls that must sit at
+        # chance: day-0 (a display leak would lift it), frozen (the echo — the engine's
+        # learned half must be load-bearing), deaf (the channel must be in the path), and
+        # for direction B the display-identity scramble (the targeted second-aperture null,
+        # better powered than the 12-trial day-0). scramble and yoked are reported beside as
+        # diagnostics, not gates — yoked is supporting, not the load-bearing null (fable).
+        structural = (rate(day0), rate(frozen), rate(deaf), rate(dscramble))
         structural_ok = all(r is None or r <= 0.65 for r in structural)
         support_ok = sig_support == 2 and act_support == 2
         formed = obs > 0.5 and p <= alpha and support_ok and structural_ok
@@ -546,8 +571,16 @@ def session_stats(log: list[dict[str, Any]], *, vocab: dict[str, Any] | None = N
     # a symmetric language.
     consistency = _cross_consistency(log)
 
+    # A high display-identity-scramble null means the human read the answer through a cue
+    # we did not intend (a leak), so any positive B accuracy is not communication evidence —
+    # the whole session verdict is voided, not just direction B.
+    dscramble_rate = directions[_B]["nulls"]["dscramble"]["rate"]
+    audit_failed = dscramble_rate is not None and dscramble_rate > 0.65
+
     both = directions[_A]["verdict"] == "formed" and directions[_B]["verdict"] == "formed"
-    if both:
+    if audit_failed:
+        verdict = "audit_failed"
+    elif both:
         verdict = "two_way_session_evidence"
     elif directions[_A]["verdict"] == "formed" or directions[_B]["verdict"] == "formed":
         verdict = "one_way_session_evidence"
