@@ -587,11 +587,20 @@
       순간당 폭은 비트의 일부. 측정: <code>rate_code.py</code> · <code>context_modulation.py</code> ·
       <code>context_synergy.py</code>.
     </p>
+    <p class="note" style="margin-top:-8px">
+      <strong>사슬(chain)</strong>은 쌍 사이 결합입니다. 기본 <code>0.0</code>은 래치가 독립이라
+      <strong>비통합</strong>(Φ 인수분해) — 발표된 모든 수치가 이 값에서 측정됐습니다. 작은 사슬
+      <code>0.05</code>는 6유닛(3쌍)에서 <strong>통합</strong>으로 측정되며(감쇠 테스트, 원시 Φ 크기가
+      아님) 든 깊이 손실이 측정되지 않습니다. 단 이 셀의 폭(32쌍)은 그 판정을 낼 수 있는 폭이
+      <strong>아닙니다</strong> — 넓은 셀이 0.05라 해서 통합으로 측정된 것이 아닙니다.
+      측정: <code>rate_chain.py</code> · <code>integrated_rate.py</code>.
+    </p>
 
     <div class="metrics">
       <div class="metric"><div class="k">단계</div><div class="v" id="rt-phase">—</div></div>
       <div class="metric"><div class="k">든 레이트</div><div class="v"><span id="rt-rate">—</span></div></div>
       <div class="metric"><div class="k">현재 읽기</div><div class="v" id="rt-count">—</div></div>
+      <div class="metric"><div class="k">사슬 chain</div><div class="v" id="rt-chain">—</div></div>
     </div>
 
     <p class="label" style="margin-top:14px">과거 개체군 — 켜진 개수가 아날로그 기억 (파랑=위 · 분홍=아래)</p>
@@ -1436,6 +1445,7 @@ function renderRate(d) {
   const shown = d.held_rate == null ? d.rate : d.held_rate;
   $("rt-rate").textContent = `${Math.round(shown * 100)}% · ${Math.round(shown * d.n_pairs)}/${d.n_pairs}`;
   $("rt-count").textContent = d.cur_count == null ? "—" : `${d.cur_count}/${d.n_pairs}`;
+  $("rt-chain").textContent = d.chain === 0 ? "0 (비통합)" : `${d.chain} (통합 · 6유닛서만 판정)`;
   rtDrawPopulation($("rt-population"), d.population, d.n_pairs);
   rtDrawPopulation($("rt-current"), d.current, d.n_pairs);
   rtDrawHistory($("rt-history"), d);

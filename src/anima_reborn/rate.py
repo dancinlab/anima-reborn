@@ -21,8 +21,16 @@ HOLD (the count holds the depth through silence) -> CONSUME (a fixed current sym
 the held count, reads differently by the held past). It DRIVES `CoupledEngine`, adds no new physics,
 and is the reproducible half made watchable — the numbers still live in `state/`, measured there.
 
-Not language, not integration (the population is chain 0 — Phi factorizes; this buys held depth and
-usable context, not Phi), bounded by the population width (a fraction of a bit of past per read).
+Not language, and at the DEFAULT not integration: `chain=0.0` leaves the latches independent, so Phi
+factorizes across the pairs and this buys held depth and usable context, not Phi. That default is a
+CHOICE rather than a necessity, and the choice was measured — `state/communication/integrated_rate.py`
+sweeps the inter-pair `chain` on a Phi-measurable 3-pair population and finds the two are NOT
+exclusive: chain 0 is not integrated (the `phi_proxy` decay/separation test, never the raw exact-Phi
+magnitude, which is a width-artefact there), while chain 0.05 IS integrated with the held-depth
+margin over its shuffled floor 0.268 vs chain 0's 0.240 — no measured depth cost. A larger chain does
+trade it away (0.20 -> margin 0.040). So `chain=` is exposed: the cell CAN integrate at a small chain
+at no measured depth cost, while the default stays bit-identical to every published measurement.
+Bounded by the population width either way (a fraction of a bit of past per read).
 """
 
 from __future__ import annotations
@@ -32,7 +40,7 @@ from typing import Any
 
 from .coupled import ALTERNATING, FIXED, AMPLITUDE, CoupledEngine, Wiring
 
-__all__ = ["RateCell", "PAIRS_N", "PAST_DEPTHS"]
+__all__ = ["RateCell", "PAIRS_N", "PAST_DEPTHS", "CHAIN", "INTEGRATED_CHAIN"]
 
 PAIRS_N = 32
 """Latches in the population — the count lives in 0..N. Width buys the coexistence a single latch
@@ -59,6 +67,15 @@ the context effect, isolated."""
 PAST_DEPTHS = (0.2, 0.5, 0.8)
 """The past depths cycled, low to high, so the held rate visibly rises with the input."""
 
+CHAIN = 0.0
+"""Default inter-pair coupling: 0.0 = independent latches, NOT integrated. `default-stays-exact` —
+every number published for this cell was measured here. `INTEGRATED_CHAIN` is the measured
+alternative."""
+
+INTEGRATED_CHAIN = 0.05
+"""The chain `state/communication/integrated_rate.py` measured as integrated (phi_proxy decay test,
+3 pairs / 6 units) at no measured held-depth cost. Not the default — offered as the option."""
+
 TELL_TICKS = 192      # internal engine ticks to write the past population (~ the measured TELL)
 HOLD_TICKS = 96       # deaf hold — the count sits still, the analog memory
 CONSUME_TICKS = 120   # the modulated current write settles
@@ -79,10 +96,22 @@ def _mean_delta(values: tuple[float, ...], n_pairs: int) -> float:
 class RateCell:
     """A hold-and-consume analog register. A passive viewer engine: `step()` advances the current
     phase, cycling TELL -> HOLD -> CONSUME; `reset()` starts fresh. `tell()` / `consume()` are the
-    units the `state/` measurements drive directly (a script measures the shipped engine)."""
+    units the `state/` measurements drive directly (a script measures the shipped engine).
 
-    def __init__(self, *, n_pairs: int = PAIRS_N, seed: int | None = None) -> None:
+    `chain=` is the inter-pair coupling handed to every population this cell builds. It defaults to
+    `CHAIN` (0.0 — independent latches, not integrated), which keeps the cell bit-identical to the
+    behaviour every published number was measured on. `INTEGRATED_CHAIN` (0.05) is the value
+    `state/communication/integrated_rate.py` measured as integrated by the phi_proxy decay test at 3
+    pairs / 6 units, with no measured held-depth cost. That verdict is scoped to that width: at this
+    cell's default 32 pairs the proxy floor is not trustworthy, so a wide cell running chain 0.05 is
+    NOT thereby measured integrated."""
+
+    def __init__(self, *, n_pairs: int = PAIRS_N, chain: float = CHAIN,
+                 seed: int | None = None) -> None:
         self.n_pairs = int(n_pairs)
+        self.chain = float(chain)
+        if not 0.0 <= self.chain <= 1.0:
+            raise ValueError(f"chain must be in [0, 1], got {chain}")
         self._seed = 0 if seed is None else int(seed)
         self.reset()
 
@@ -110,7 +139,7 @@ class RateCell:
         self._op += 1
         d = WRITE_SCALE * depth * sign
         return CoupledEngine(
-            units=2 * self.n_pairs, wiring=Wiring.PAIRS, chain=0.0, rhythm=ALTERNATING,
+            units=2 * self.n_pairs, wiring=Wiring.PAIRS, chain=self.chain, rhythm=ALTERNATING,
             drive=(d, -d) * self.n_pairs, seed=self._seed * 100_003 + self._op,
         )
 
@@ -137,7 +166,7 @@ class RateCell:
         gain = GAIN_BASE + GAIN_K * abs(self._held_mean)
         d = CUR_BASE * depth * sign * gain
         cur = CoupledEngine(
-            units=2 * self.n_pairs, wiring=Wiring.PAIRS, chain=0.0, rhythm=ALTERNATING,
+            units=2 * self.n_pairs, wiring=Wiring.PAIRS, chain=self.chain, rhythm=ALTERNATING,
             drive=(d, -d) * self.n_pairs, seed=self._seed * 100_003 + self._op,
         )
         cur.run(TELL_TICKS)
@@ -185,7 +214,7 @@ class RateCell:
             self._op += 1
             d = CUR_BASE * CUR_DEPTH * 1 * gain
             self._cur = CoupledEngine(
-                units=2 * self.n_pairs, wiring=Wiring.PAIRS, chain=0.0, rhythm=ALTERNATING,
+                units=2 * self.n_pairs, wiring=Wiring.PAIRS, chain=self.chain, rhythm=ALTERNATING,
                 drive=(d, -d) * self.n_pairs, seed=self._seed * 100_003 + self._op,
             )
             self._cur.run(TELL_TICKS)  # settle the current write once, then hold-read live
@@ -218,6 +247,7 @@ class RateCell:
         return {
             "phase": self._phase,
             "n_pairs": self.n_pairs,
+            "chain": round(self.chain, 4),
             "past_depth": round(self._past_depth, 3),
             "past_sign": self._past_sign,
             "cur_depth": CUR_DEPTH,
