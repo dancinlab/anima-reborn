@@ -41,6 +41,7 @@ from ..coupled import (
     Wiring,
 )
 from ..crystal import TimeCrystal
+from ..dialogue import DialogueSession
 from ..emergence import EmergenceEngine
 from ..pipeline import Pipeline
 from ..repulsion import RepulsionField
@@ -48,6 +49,11 @@ from ..repulsion import RepulsionField
 __all__ = ["Viewer", "serve"]
 
 PAGE = Path(__file__).parent / "page.html"
+
+SESSIONS_DIR = Path(__file__).resolve().parents[3] / "state" / "communication" / "sessions"
+"""Where a completed human dialogue session is written — git-tracked with the rest of the
+work outputs (`preserve-state`). This is the viewer, the one place in the package that does
+I/O; the session engine itself only accumulates its log in memory."""
 
 MAX_STEPS_PER_REQUEST = 240
 """Cap on the `steps` of a one-shot `/api/<engine>` request. The streaming path
@@ -61,6 +67,7 @@ TICK_RATES = {
     "base": 30.0,
     "coupled": 30.0,
     "align": 60.0,
+    "dialogue": 8.0,
 }
 """Ticks per second, carried from the origin's `setInterval` periods so the
 engines run at the speed their thresholds were chosen against."""
@@ -327,6 +334,55 @@ class _AlignHandler:
         }
 
 
+def _persist_session(report: dict[str, Any]) -> None:
+    """Write a completed session's log and verdict to `state/communication/sessions/`.
+
+    The I/O lives here in the viewer, never in the engine. A missing or read-only tree is
+    swallowed rather than crashing the stream — the session is still shown in the browser.
+    """
+    try:
+        SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y-%m-%d-%H%M%S")
+        path = SESSIONS_DIR / f"{stamp}-{report['token']}.json"
+        path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+
+
+class _DialogueHandler:
+    """The live human dialogue session — the one interactive tab.
+
+    Unlike every other handler its engine waits on human input rather than free-running:
+    `configure` carries the human's button press (a trial nonce and a choice) into the
+    session, `step` (in the ticker) resolves it, and `describe` reads the frame. The
+    session is a bit-exact no-op on a tick with nothing submitted, so the fixed tick rate
+    is only an input-latency bound. On completion the finished log is written to `state/`.
+    """
+
+    @staticmethod
+    def configure(session: DialogueSession, params: dict[str, list[str]]) -> None:
+        raw_nonce = params.get("nonce")
+        raw_choice = params.get("choice")
+        if not raw_nonce or not raw_choice:
+            return  # a plain frame request (sliders/one-shot) — nothing to submit
+        try:
+            nonce = int(raw_nonce[0])
+            choice = int(raw_choice[0])
+        except ValueError:
+            return
+        # Idempotent: a stale or double-submitted nonce is ignored by the session, so the
+        # ticker re-applying the same persistent control dict cannot double-resolve a trial.
+        session.submit(nonce, choice)
+
+    @staticmethod
+    def describe(session: DialogueSession) -> dict[str, Any]:
+        frame = session.describe()
+        report = session.take_report()
+        if report is not None:
+            _persist_session(report)
+        return frame
+
+
 _HANDLERS: dict[str, Any] = {
     "emergence": _EmergenceHandler,
     "crystal": _CrystalHandler,
@@ -335,6 +391,7 @@ _HANDLERS: dict[str, Any] = {
     "base": _BaseHandler,
     "coupled": _CoupledHandler,
     "align": _AlignHandler,
+    "dialogue": _DialogueHandler,
 }
 
 
@@ -449,6 +506,7 @@ class Viewer:
             "base": BaseEngine(seed=seed),
             "coupled": CoupledEngine(seed=seed),
             "align": Aligner(seed=seed),
+            "dialogue": DialogueSession(seed=seed),
         }
         self._engines = {
             name: _Guarded(engine, threading.Lock())
