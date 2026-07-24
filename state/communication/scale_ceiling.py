@@ -94,6 +94,30 @@ def _arm(wiring: Wiring, chain: float, *, budget: int,
     return statistics.fmean(phis), statistics.fmean(floors), spread
 
 
+def confirm_trend() -> list[dict]:
+    """Re-run the TREND rows (the pre-crossing budgets) at the same 3 seeds.
+
+    `confirm()` closed the crossing row's seed gap; these are the rows the gap-closes-monotonically
+    statement rests on, and they were still 2-seed. Running them at 3 makes EVERY row in this
+    section match `wide_integration.py`'s seed count, so the section's conditions no longer differ
+    from the work it corrects. The verdict does not depend on these rows crossing (they do not —
+    their gaps are negative by construction); what is checked is that the MONOTONE CLOSING survives
+    the third seed."""
+    rows = []
+    for budget in [b for b in BUDGETS if b != CROSSING_BUDGET]:
+        ring, ring_floor, _ = _arm(Wiring.PAIRS, RING_CHAIN, budget=budget, seeds=CONFIRM_SEEDS)
+        bar = 0.0
+        spread = 0.0
+        for wiring, chain in REDUCIBLE:
+            phi, _f, sp = _arm(wiring, chain, budget=budget, seeds=CONFIRM_SEEDS)
+            bar = max(bar, phi)
+            spread = max(spread, sp)
+        rows.append({"budget": budget, "ring": ring, "floor": ring_floor, "bar": bar,
+                     "spread": spread, "gap": ring - bar,
+                     "matched": ring > bar + K_SPREADS * spread, "seeds": CONFIRM_SEEDS})
+    return rows
+
+
 def confirm() -> dict:
     """Re-run ONLY the crossing row at 3 seeds — closing this script's own stated weakness.
 
@@ -175,6 +199,17 @@ def main() -> None:
     if c["matched"]:
         print(f"    the crossing HOLDS at 3 seeds — it is not an artefact of which two were drawn,")
         print(f"    and the row now matches wide_integration's own seed count.")
+        print(f"\n[confirm-trend] the pre-crossing rows at the same {len(CONFIRM_SEEDS)} seeds")
+        trend = confirm_trend()
+        for t in trend:
+            print(f"    budget {t['budget']:>6}: ring {t['ring']:.3f}  bar {t['bar']:.3f}  "
+                  f"GAP {t['gap']:+.3f}  matched: {'yes' if t['matched'] else 'no'}")
+        gaps = [t["gap"] for t in trend] + [c["gap"]]
+        closes = all(gaps[i + 1] > gaps[i] for i in range(len(gaps) - 1))
+        print(f"    3-seed gaps: {' -> '.join(f'{g:+.3f}' for g in gaps)} — "
+              f"{'monotone closing, and it crosses' if closes else 'NOT monotone; re-read the rows'}")
+        print(f"    every row in this section is now {len(CONFIRM_SEEDS)}-seed: the conditions match")
+        print(f"    wide_integration exactly. 3 is the MATCHED seed count, not a confidence interval.")
     else:
         print(f"    the crossing does NOT hold at 3 seeds — the 2-seed result was seed-lucky, and the")
         print(f"    width-{UNITS} claim must be withdrawn to a TREND. Report this, do not re-pick seeds.")
