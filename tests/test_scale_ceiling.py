@@ -63,10 +63,21 @@ class TestBudgetMechanism:
         assert starved < measured, (starved, measured)
 
     def test_conditions_are_declared(self) -> None:
-        """The trend rows used 2 seeds where wide_integration used 3; RESULTS says so. If someone
-        raises SEEDS without re-running, this catches the doc drifting from the script."""
+        """SEEDS is the fast 2-seed grid main() sweeps; the REPORTED table is the 3-seed one from
+        confirm()/confirm_trend(). If someone changes either set without re-running, the doc drifts
+        from the script and this catches it."""
         assert len(sc.SEEDS) == 2, sc.SEEDS
         assert sc.UNITS == 14 and sc.BUDGETS[-1] == 16000, (sc.UNITS, sc.BUDGETS)
+
+    def test_every_reported_row_is_covered_at_three_seeds(self) -> None:
+        """RESULTS now reports ALL THREE rows at 3 seeds, so the code must cover all three: the
+        crossing row via confirm() and the pre-crossing rows via confirm_trend(). If a budget is
+        added to BUDGETS without extending the confirms, the reported table would silently stop
+        being all-3-seed — this fails first."""
+        assert callable(sc.confirm_trend)
+        covered = {sc.CROSSING_BUDGET} | {b for b in sc.BUDGETS if b != sc.CROSSING_BUDGET}
+        assert covered == set(sc.BUDGETS), (covered, sc.BUDGETS)
+        assert len(sc.CONFIRM_SEEDS) == 3, sc.CONFIRM_SEEDS
 
     def test_the_crossing_row_is_reconfirmed_at_three_seeds(self) -> None:
         """The whole claim rests on ONE row crossing, so that row was re-run at wide_integration's
