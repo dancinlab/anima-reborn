@@ -47,7 +47,23 @@ numbers and the two ceilings (absolute test, matched test), each with the width 
 Measured verdict (budget 4000, seeds 7/11/13; full table in RESULTS): the ABSOLUTE test is clean
 only to 4 units — a reducible null false-positives from 6 (sporadic) and solidly at 8 — while the
 MATCHED test keeps every reducible null negative at every width and certifies the integrated ring
-through ~12 before the ring itself sinks into the width-artefact cloud (14+). Neither reaches 16.
+through ~12 before the ring itself sinks into the width-artefact cloud (14+).
+
+**CORRECTION, from later work — read every ceiling here as WIDTH@BUDGET, not as a width wall.**
+This section originally closed with "Neither reaches 16", which reads as a property of the WIDTH.
+It is not: it is a property of the width AT THIS BUDGET (4000). `scale_ceiling.py` then measured
+that width 14's collapse was undersampling — raising the budget lifts the ring and lowers the
+reducible bar until they cross at 16000 (3 seeds) — and `width16_scale.py` predicted, before
+running, that width 16 would cross at 4x that (64000) and it did, with the same gap (+0.110).
+`scaling_law.py` then showed the same rule downward at widths 10 and 12, covering both pair
+parities twice. So the honest form of every number below is "the ceiling AT budget 4000"; the
+ceiling MOVES with the budget, by the state space. The original sentence is corrected here rather
+than deleted, because the reading it invites — a width wall — is exactly the mistake the later
+measurements had to undo (`artefact-honesty`).
+
+What has NOT changed: the ceilings below are still the right numbers at this budget, the ABSOLUTE
+test is still untrustworthy past 4 units, and nothing is unbounded — width 18 is out of reach at any
+budget reachable here (a single width-18 reading at budget 16000 already exceeds 300s).
 
 Runtime: a full `main()` is minutes — the widths 14/16 proxy readings are tens of seconds each even
 memoized. The exact cross-check touches only units <= 6.
@@ -184,9 +200,10 @@ def report_reducible_nulls(budget: int = BUDGET) -> int | None:
             first_fp = w
         mark = " <- false positive" if fp_here else ""
         print(f"{w:>4}  " + "".join(f"{c:>16}" for c in cells) + f"{mark}")
-    print(f"\n  Absolute-test ceiling (last width with NO reducible false positive): "
-          f"{'>' + str(WIDTHS[-1]) if first_fp is None else first_fp - 2}")
+    print(f"\n  Absolute-test ceiling AT BUDGET {budget} (last width with NO reducible false "
+          f"positive): {'>' + str(WIDTHS[-1]) if first_fp is None else first_fp - 2}")
     print(f"  First reducible false positive at width: {first_fp}")
+    print(f"  (a ceiling here is width@budget, never a width wall — see the module docstring)")
     return first_fp
 
 
@@ -213,8 +230,12 @@ def report_matched(budget: int = BUDGET) -> int | None:
                   ("  I:positive" if int_ok else "  I:sunk-into-cloud")
         print(f"{w:>4}  {bar:>8.3f}{spread:>8.3f}   "
               + "".join(f"{c:>7.3f}" for c in red_cells) + f"{ci:>8.3f}   {verdict}")
-    print(f"\n  Matched-test trust ceiling (integrated still clears the reducible cloud AND no")
-    print(f"  reducible false positive): {int_ceiling}")
+    print(f"\n  Matched-test trust ceiling AT BUDGET {budget} (integrated still clears the reducible")
+    print(f"  cloud AND no reducible false positive): {int_ceiling}")
+    print(f"  This ceiling MOVES with the budget, by the state space: scale_ceiling.py measured")
+    print(f"  width 14 crossing at budget 16000, width16_scale.py predicted and hit width 16 at")
+    print(f"  64000, and scaling_law.py confirmed the same rule downward at widths 10 and 12.")
+    print(f"  Quote it as '{int_ceiling}@{budget}', never as a width wall.")
     return int_ceiling
 
 
