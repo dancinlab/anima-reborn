@@ -63,7 +63,18 @@ class TestBudgetMechanism:
         assert starved < measured, (starved, measured)
 
     def test_conditions_are_declared(self) -> None:
-        """The run used 2 seeds where wide_integration used 3; RESULTS says so. If someone raises
-        SEEDS without re-running, this catches the doc drifting from the script."""
+        """The trend rows used 2 seeds where wide_integration used 3; RESULTS says so. If someone
+        raises SEEDS without re-running, this catches the doc drifting from the script."""
         assert len(sc.SEEDS) == 2, sc.SEEDS
         assert sc.UNITS == 14 and sc.BUDGETS[-1] == 16000, (sc.UNITS, sc.BUDGETS)
+
+    def test_the_crossing_row_is_reconfirmed_at_three_seeds(self) -> None:
+        """The whole claim rests on ONE row crossing, so that row was re-run at wide_integration's
+        own 3 seeds and held (ring 0.633 > bar 0.523, gap +0.110). Re-deriving it here would cost
+        ~17 minutes, so what is pinned is the CONTRACT: confirm() exists, uses 3 seeds including the
+        two original ones, and scores the crossing budget. If someone narrows the seed set or moves
+        the budget, the RESULTS reconfirmation stops matching the code and this fails."""
+        assert sc.CONFIRM_SEEDS == (7, 11, 13), sc.CONFIRM_SEEDS
+        assert set(sc.SEEDS).issubset(sc.CONFIRM_SEEDS), (sc.SEEDS, sc.CONFIRM_SEEDS)
+        assert sc.CROSSING_BUDGET == sc.BUDGETS[-1] == 16000, (sc.CROSSING_BUDGET, sc.BUDGETS)
+        assert callable(sc.confirm)
