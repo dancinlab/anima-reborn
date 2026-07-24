@@ -79,13 +79,40 @@ REDUCIBLE = (                 # the width-matched nulls that define the bar (eac
 K_SPREADS = 3                 # wide_integration's matched-test margin
 
 
-def _arm(wiring: Wiring, chain: float, *, budget: int) -> tuple[float, float, float]:
+CONFIRM_SEEDS = (7, 11, 13)   # the crossing row re-run at wide_integration's own 3 seeds
+CROSSING_BUDGET = 16000
+
+
+def _arm(wiring: Wiring, chain: float, *, budget: int,
+         seeds: tuple[int, ...] = ()) -> tuple[float, float, float]:
     """(mean phi_hat, mean absolute floor, seed spread) for one arm at this budget."""
-    rs = [pp.reading(wiring, units=UNITS, chain=chain, budget=budget, seed=s) for s in SEEDS]
+    use = seeds or SEEDS
+    rs = [pp.reading(wiring, units=UNITS, chain=chain, budget=budget, seed=s) for s in use]
     phis = [r["phi_hat"] for r in rs]
     floors = [r["floor"] for r in rs]
     spread = statistics.pstdev(phis) if len(phis) > 1 else 0.0
     return statistics.fmean(phis), statistics.fmean(floors), spread
+
+
+def confirm() -> dict:
+    """Re-run ONLY the crossing row at 3 seeds — closing this script's own stated weakness.
+
+    The grid above used 2 seeds for cost, which is weaker than the 3 `wide_integration.py` used, and
+    the whole claim rests on ONE row crossing. This re-measures that row at the same 3 seeds so the
+    crossing is not an artefact of which two seeds were drawn. Only the crossing budget is re-run;
+    the trend rows stay 2-seed and are still reported as such."""
+    ring, ring_floor, ring_spread = _arm(Wiring.PAIRS, RING_CHAIN,
+                                         budget=CROSSING_BUDGET, seeds=CONFIRM_SEEDS)
+    bar = 0.0
+    spread = 0.0
+    for wiring, chain in REDUCIBLE:
+        phi, _f, sp = _arm(wiring, chain, budget=CROSSING_BUDGET, seeds=CONFIRM_SEEDS)
+        bar = max(bar, phi)
+        spread = max(spread, sp)
+    gap = ring - bar
+    return {"ring": ring, "ring_spread": ring_spread, "bar": bar, "spread": spread,
+            "gap": gap, "matched": ring > bar + K_SPREADS * spread,
+            "seeds": CONFIRM_SEEDS, "budget": CROSSING_BUDGET}
 
 
 def main() -> None:
@@ -137,6 +164,20 @@ def main() -> None:
         print(f"  {UNITS} looks like a real wall for this estimator, not undersampling. wide_integration's")
         print(f"  matched ceiling of 12 stands as a width statement, and more budget is not the fix.")
     print(f"  Conditions: {len(SEEDS)} seeds (wide_integration used 3), budgets {BUDGETS}, width {UNITS} only.")
+
+    # The claim rests on ONE row crossing, measured at 2 seeds. Re-run that row at 3.
+    print(f"\n[confirm] the crossing row at {len(CONFIRM_SEEDS)} seeds {CONFIRM_SEEDS} "
+          f"(budget {CROSSING_BUDGET})")
+    c = confirm()
+    print(f"    ring {c['ring']:.3f} (spread {c['ring_spread']:.3f})   bar {c['bar']:.3f} "
+          f"(spread {c['spread']:.3f})   GAP {c['gap']:+.3f}   matched: "
+          f"{'yes' if c['matched'] else 'NO'}")
+    if c["matched"]:
+        print(f"    the crossing HOLDS at 3 seeds — it is not an artefact of which two were drawn,")
+        print(f"    and the row now matches wide_integration's own seed count.")
+    else:
+        print(f"    the crossing does NOT hold at 3 seeds — the 2-seed result was seed-lucky, and the")
+        print(f"    width-{UNITS} claim must be withdrawn to a TREND. Report this, do not re-pick seeds.")
 
 
 if __name__ == "__main__":
